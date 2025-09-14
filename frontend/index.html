@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kişi Rehberi</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="giris-formu">
+        <h2>Giriş Yap</h2>
+        <input type="text" id="kullaniciAdi" placeholder="Kullanıcı Adı" required>
+        <input type="password" id="sifre" placeholder="Şifre" required>
+        <button id="girisButton">Giriş Yap</button>
+        <p>Hesabınız yok mu? <a href="#" id="kayitLink">Kayıt Ol</a></p>
+    </div>
+
+    <div class="kayit-formu" style="display: none;">
+        <h2>Kayıt Ol</h2>
+        <input type="text" id="yeniKullaniciAdi" placeholder="Kullanıcı Adı" required>
+        <input type="password" id="yeniSifre" placeholder="Şifre" required>
+        <button id="kayitButton">Kayıt Ol</button>
+    </div>
+
+    <div class="container" style="display: none;">
+        <h1>Kişi Rehberi</h1>
+        <form id="kisiForm">
+            <input type="text" id="isim" placeholder="İsim" required>
+            <input type="email" id="eposta" placeholder="E-posta" required>
+            <input type="tel" id="telefon" placeholder="Telefon" required>
+            <input type="text" id="adres" placeholder="Adres" required>
+            <button type="submit">Kişi Ekle</button>
+        </form>
+        <div class="search">
+            <input type="text" id="ara" placeholder="Kişi ara...">
+            <button id="araButton">Ara</button>
+        </div>
+        <div class="filtreleme">
+            <select id="sirala">
+                <option value="">Varsayılan</option>
+                <option value="isim">İsme Göre</option>
+                <option value="telefon">Telefona Göre</option>
+            </select>
+            <button id="filtreleButton">Filtrele</button>
+        </div>
+        <button id="exportEmailsButton">E-postaları Dışa Aktar</button>
+        <div id="sonuclar"></div>
+        <div id="harita"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

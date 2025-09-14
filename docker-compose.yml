@@ -1,0 +1,29 @@
+version: '3'
+services:
+  web:
+    build: ./backend/python
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+  cpp_app:
+    build: ./backend/cpp
+    depends_on:
+      - db
+  csharp_app:
+    build: ./backend/csharp
+    depends_on:
+      - db
+  db:
+    image: postgres
+    environment:
+      POSTGRES_USER: kullanici
+      POSTGRES_PASSWORD: sifre
+      POSTGRES_DB: rehber
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
