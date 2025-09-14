@@ -7,7 +7,7 @@ Kişileri ekleyin, düzenleyin, haritada görüntüleyin, filtreleyin ve e-posta
 
 ## 📌 Proje Şeması
 ```bash
-rehber-projesi/
+REH_FOR_CV-2/
 │
 ├── backend/
 │   ├── python/
