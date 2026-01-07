@@ -1,21 +1,47 @@
-version: '3'
+version: '3.8'
+
 services:
+  # Python Flask Backend
   web:
     build: ./backend/python
+    container_name: osint_rehber_api
     ports:
       - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://kullanici:sifre@db/rehber
+      - JWT_SECRET_KEY=osint-rehber-gizli-anahtar-2026
+      - FLASK_ENV=development
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - rehber_network
+
+  # C++ App (Email processor)
   cpp_app:
     build: ./backend/cpp
+    container_name: osint_rehber_cpp
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    networks:
+      - rehber_network
+
+  # C# App (Email processor)
   csharp_app:
     build: ./backend/csharp
+    container_name: osint_rehber_csharp
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    networks:
+      - rehber_network
+
+  # PostgreSQL Database
   db:
-    image: postgres
+    image: postgres:15-alpine
+    container_name: osint_rehber_db
     environment:
       POSTGRES_USER: kullanici
       POSTGRES_PASSWORD: sifre
@@ -24,6 +50,19 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U kullanici -d rehber" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - rehber_network
+
+networks:
+  rehber_network:
+    driver: bridge
 
 volumes:
   postgres_data:

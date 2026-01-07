@@ -1,119 +1,709 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+"""
+REH_FOR_CV-2 OSINT Rehber - Flask Backend API
+Tam CRUD operasyonları, JWT authentication, rate limiting ve CORS desteği
+"""
+
+import os
+import re
+from datetime import timedelta
+from functools import wraps
+
+from flask import Flask, request, jsonify, g
+from flask_cors import CORS
+from flask_jwt_extended import (
+    JWTManager, create_access_token, create_refresh_token,
+    jwt_required, get_jwt_identity, get_jwt
+)
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from werkzeug.security import generate_password_hash, check_password_hash
 from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut
-from email_data_collector import export_emails_to_file
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+
+from models import db, Kullanici, Kisi, AuditLog
+
+
+# =============================================================================
+# APP CONFIGURATION
+# =============================================================================
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://kullanici:sifre@db/rehber'
+
+# Database
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    'DATABASE_URL', 
+    'postgresql://kullanici:sifre@db/rehber'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = 'sizin-gizli-anahtarınız'
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300
+}
+
+# JWT Configuration
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'osint-rehber-gizli-anahtar-2026')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
+
+# Initialize extensions
+db.init_app(app)
 jwt = JWTManager(app)
-db = SQLAlchemy(app)
 
-class Kullanici(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    kullanici_adi = db.Column(db.String(80), unique=True, nullable=False)
-    sifre_hash = db.Column(db.String(128), nullable=False)
+# CORS - Tüm originlere izin ver (development için)
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:*", "http://127.0.0.1:*", "file://*"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
-class Kisi(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    isim = db.Column(db.String(80), nullable=False)
-    eposta = db.Column(db.String(120), unique=True, nullable=False)
-    telefon = db.Column(db.String(20), nullable=False)
-    adres = db.Column(db.String(200), nullable=False)
-    enlem = db.Column(db.Float)
-    boylam = db.Column(db.Float)
+# Rate Limiting
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def validate_email(email):
+    """E-posta formatı doğrulama"""
+    if not email:
+        return True  # Opsiyonel alan
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
+
+def validate_phone(phone):
+    """Telefon formatı doğrulama"""
+    if not phone:
+        return True  # Opsiyonel alan
+    # Sadece rakam, +, -, boşluk ve parantez kabul et
+    pattern = r'^[\d\s\+\-\(\)]+$'
+    return re.match(pattern, phone) is not None and len(re.sub(r'\D', '', phone)) >= 7
+
+
+def geocode_address(address):
+    """Adres geocoding - enlem/boylam bul"""
+    if not address:
+        return None, None
+    try:
+        geolocator = Nominatim(user_agent="osint_rehber_v2", timeout=10)
+        location = geolocator.geocode(address)
+        if location:
+            return location.latitude, location.longitude
+    except (GeocoderTimedOut, GeocoderServiceError):
+        pass
+    return None, None
+
+
+def log_action(action, entity_type, entity_id=None, details=None):
+    """Audit log kaydı oluştur"""
+    try:
+        kullanici_id = None
+        try:
+            identity = get_jwt_identity()
+            if identity:
+                kullanici = Kullanici.query.filter_by(kullanici_adi=identity).first()
+                if kullanici:
+                    kullanici_id = kullanici.id
+        except:
+            pass
+        
+        log = AuditLog(
+            kullanici_id=kullanici_id,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            details=details,
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', '')[:500]
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        print(f"Audit log error: {e}")
+
+
+def get_current_user():
+    """JWT'den mevcut kullanıcıyı al"""
+    identity = get_jwt_identity()
+    return Kullanici.query.filter_by(kullanici_adi=identity).first()
+
+
+# =============================================================================
+# ERROR HANDLERS
+# =============================================================================
+
+@app.errorhandler(400)
+def bad_request(error):
+    return jsonify({"error": "Geçersiz istek", "message": str(error)}), 400
+
+
+@app.errorhandler(401)
+def unauthorized(error):
+    return jsonify({"error": "Yetkisiz erişim", "message": "Giriş yapmanız gerekiyor"}), 401
+
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "Bulunamadı", "message": str(error)}), 404
+
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return jsonify({"error": "Çok fazla istek", "message": "Lütfen biraz bekleyin"}), 429
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return jsonify({"error": "Sunucu hatası", "message": "Bir hata oluştu"}), 500
+
+
+# =============================================================================
+# AUTH ENDPOINTS
+# =============================================================================
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({"status": "healthy", "service": "osint-rehber"})
+
 
 @app.route('/kayit', methods=['POST'])
+@limiter.limit("5 per hour")
 def kayit():
-    data = request.json
-    sifre_hash = generate_password_hash(data['sifre'])
-    yeni_kullanici = Kullanici(kullanici_adi=data['kullanici_adi'], sifre_hash=sifre_hash)
+    """Yeni kullanıcı kaydı"""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({"error": "Veri bulunamadı"}), 400
+    
+    kullanici_adi = data.get('kullanici_adi', '').strip()
+    sifre = data.get('sifre', '')
+    email = data.get('email', '').strip() if data.get('email') else None
+    
+    # Validasyonlar
+    if not kullanici_adi or len(kullanici_adi) < 3:
+        return jsonify({"error": "Kullanıcı adı en az 3 karakter olmalı"}), 400
+    
+    if not sifre or len(sifre) < 6:
+        return jsonify({"error": "Şifre en az 6 karakter olmalı"}), 400
+    
+    if email and not validate_email(email):
+        return jsonify({"error": "Geçersiz e-posta formatı"}), 400
+    
+    # Kullanıcı adı kontrolü
+    if Kullanici.query.filter_by(kullanici_adi=kullanici_adi).first():
+        return jsonify({"error": "Bu kullanıcı adı zaten kullanılıyor"}), 400
+    
+    # Email kontrolü
+    if email and Kullanici.query.filter_by(email=email).first():
+        return jsonify({"error": "Bu e-posta zaten kullanılıyor"}), 400
+    
+    # Kullanıcı oluştur
+    sifre_hash = generate_password_hash(sifre)
+    yeni_kullanici = Kullanici(
+        kullanici_adi=kullanici_adi,
+        sifre_hash=sifre_hash,
+        email=email
+    )
+    
     db.session.add(yeni_kullanici)
     db.session.commit()
-    return jsonify({"mesaj": "Kullanıcı başarıyla kaydedildi!"})
+    
+    log_action('CREATE', 'Kullanici', yeni_kullanici.id, {'kullanici_adi': kullanici_adi})
+    
+    return jsonify({
+        "mesaj": "Kullanıcı başarıyla kaydedildi!",
+        "kullanici": yeni_kullanici.to_dict()
+    }), 201
+
 
 @app.route('/giris', methods=['POST'])
+@limiter.limit("10 per minute")
 def giris():
-    data = request.json
-    kullanici = Kullanici.query.filter_by(kullanici_adi=data['kullanici_adi']).first()
-    if kullanici and check_password_hash(kullanici.sifre_hash, data['sifre']):
-        access_token = create_access_token(identity=kullanici.kullanici_adi)
-        return jsonify(access_token=access_token)
-    else:
-        return jsonify({"mesaj": "Geçersiz kullanıcı adı veya şifre!"}), 401
+    """Kullanıcı girişi - JWT token döndürür"""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({"error": "Veri bulunamadı"}), 400
+    
+    kullanici_adi = data.get('kullanici_adi', '').strip()
+    sifre = data.get('sifre', '')
+    
+    if not kullanici_adi or not sifre:
+        return jsonify({"error": "Kullanıcı adı ve şifre gerekli"}), 400
+    
+    kullanici = Kullanici.query.filter_by(kullanici_adi=kullanici_adi).first()
+    
+    if not kullanici or not check_password_hash(kullanici.sifre_hash, sifre):
+        log_action('LOGIN_FAILED', 'Kullanici', details={'kullanici_adi': kullanici_adi})
+        return jsonify({"error": "Geçersiz kullanıcı adı veya şifre"}), 401
+    
+    if not kullanici.is_active:
+        return jsonify({"error": "Hesabınız devre dışı"}), 401
+    
+    # Token oluştur
+    access_token = create_access_token(identity=kullanici_adi)
+    refresh_token = create_refresh_token(identity=kullanici_adi)
+    
+    log_action('LOGIN', 'Kullanici', kullanici.id)
+    
+    return jsonify({
+        "mesaj": "Giriş başarılı!",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "kullanici": kullanici.to_dict()
+    })
 
-@app.route('/kisi/ekle', methods=['POST'])
+
+@app.route('/token/refresh', methods=['POST'])
+@jwt_required(refresh=True)
+def token_refresh():
+    """Access token yenileme"""
+    identity = get_jwt_identity()
+    access_token = create_access_token(identity=identity)
+    return jsonify({"access_token": access_token})
+
+
+@app.route('/profil', methods=['GET'])
 @jwt_required()
+def profil():
+    """Mevcut kullanıcı profili"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 404
+    
+    kisi_sayisi = Kisi.query.filter_by(kullanici_id=kullanici.id).count()
+    
+    return jsonify({
+        "kullanici": kullanici.to_dict(),
+        "istatistikler": {
+            "toplam_kisi": kisi_sayisi
+        }
+    })
+
+
+# =============================================================================
+# KISI CRUD ENDPOINTS
+# =============================================================================
+
+@app.route('/kisi', methods=['POST'])
+@jwt_required()
+@limiter.limit("30 per hour")
 def kisi_ekle():
-    current_user = get_jwt_identity()
-    data = request.json
-    try:
-        geolocator = Nominatim(user_agent="rehber_app", timeout=10)
-        location = geolocator.geocode(data['adres'])
-        yeni_kisi = Kisi(
-            isim=data['isim'],
-            eposta=data['eposta'],
-            telefon=data['telefon'],
-            adres=data['adres'],
-            enlem=location.latitude if location else None,
-            boylam=location.longitude if location else None
-        )
-        db.session.add(yeni_kisi)
-        db.session.commit()
-        return jsonify({"mesaj": "Kişi başarıyla eklendi!", "konum": {"enlem": location.latitude, "boylam": location.longitude}})
-    except GeocoderTimedOut:
-        return jsonify({"hata": "Adres bulunamadı."}), 400
+    """Yeni kişi ekle"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Veri bulunamadı"}), 400
+    
+    # Zorunlu alan kontrolü
+    isim = data.get('isim', '').strip()
+    if not isim:
+        return jsonify({"error": "İsim alanı zorunludur"}), 400
+    
+    # Opsiyonel alanlar
+    eposta = data.get('eposta', '').strip() if data.get('eposta') else None
+    telefon = data.get('telefon', '').strip() if data.get('telefon') else None
+    adres = data.get('adres', '').strip() if data.get('adres') else None
+    
+    # Validasyonlar
+    if eposta and not validate_email(eposta):
+        return jsonify({"error": "Geçersiz e-posta formatı"}), 400
+    
+    if telefon and not validate_phone(telefon):
+        return jsonify({"error": "Geçersiz telefon formatı"}), 400
+    
+    # Geocoding
+    enlem, boylam = geocode_address(adres)
+    
+    # Kişi oluştur
+    yeni_kisi = Kisi(
+        kullanici_id=kullanici.id,
+        isim=isim,
+        soyisim=data.get('soyisim', '').strip() if data.get('soyisim') else None,
+        eposta=eposta,
+        telefon=telefon,
+        telefon_2=data.get('telefon_2', '').strip() if data.get('telefon_2') else None,
+        adres=adres,
+        enlem=enlem,
+        boylam=boylam,
+        sehir=data.get('sehir', '').strip() if data.get('sehir') else None,
+        ulke=data.get('ulke', '').strip() if data.get('ulke') else None,
+        notlar=data.get('notlar', '').strip() if data.get('notlar') else None,
+        etiketler=data.get('etiketler') if isinstance(data.get('etiketler'), list) else None,
+        favori=bool(data.get('favori', False))
+    )
+    
+    db.session.add(yeni_kisi)
+    db.session.commit()
+    
+    log_action('CREATE', 'Kisi', yeni_kisi.id, {'isim': isim})
+    
+    return jsonify({
+        "mesaj": "Kişi başarıyla eklendi!",
+        "kisi": yeni_kisi.to_dict()
+    }), 201
 
-@app.route('/kisi/ara', methods=['GET'])
+
+@app.route('/kisi/<int:kisi_id>', methods=['GET'])
 @jwt_required()
-def kisi_ara():
-    isim = request.args.get('isim')
-    kisi = Kisi.query.filter_by(isim=isim).first()
-    if kisi:
-        return jsonify({
-            "isim": kisi.isim,
-            "eposta": kisi.eposta,
-            "telefon": kisi.telefon,
-            "adres": kisi.adres,
-            "enlem": kisi.enlem,
-            "boylam": kisi.boylam
-        })
-    else:
-        return jsonify({"mesaj": "Kişi bulunamadı."}), 404
+def kisi_detay(kisi_id):
+    """Kişi detayı getir"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    kisi = Kisi.query.filter_by(id=kisi_id, kullanici_id=kullanici.id).first()
+    if not kisi:
+        return jsonify({"error": "Kişi bulunamadı"}), 404
+    
+    log_action('READ', 'Kisi', kisi_id)
+    
+    return jsonify({"kisi": kisi.to_dict()})
+
+
+@app.route('/kisi/<int:kisi_id>', methods=['PUT'])
+@jwt_required()
+def kisi_guncelle(kisi_id):
+    """Kişi güncelle"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    kisi = Kisi.query.filter_by(id=kisi_id, kullanici_id=kullanici.id).first()
+    if not kisi:
+        return jsonify({"error": "Kişi bulunamadı"}), 404
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Veri bulunamadı"}), 400
+    
+    # Güncellenecek alanlar
+    guncellemeler = {}
+    
+    if 'isim' in data:
+        isim = data['isim'].strip()
+        if not isim:
+            return jsonify({"error": "İsim boş olamaz"}), 400
+        kisi.isim = isim
+        guncellemeler['isim'] = isim
+    
+    if 'soyisim' in data:
+        kisi.soyisim = data['soyisim'].strip() if data['soyisim'] else None
+    
+    if 'eposta' in data:
+        eposta = data['eposta'].strip() if data['eposta'] else None
+        if eposta and not validate_email(eposta):
+            return jsonify({"error": "Geçersiz e-posta formatı"}), 400
+        kisi.eposta = eposta
+        guncellemeler['eposta'] = eposta
+    
+    if 'telefon' in data:
+        telefon = data['telefon'].strip() if data['telefon'] else None
+        if telefon and not validate_phone(telefon):
+            return jsonify({"error": "Geçersiz telefon formatı"}), 400
+        kisi.telefon = telefon
+    
+    if 'telefon_2' in data:
+        kisi.telefon_2 = data['telefon_2'].strip() if data['telefon_2'] else None
+    
+    if 'adres' in data:
+        adres = data['adres'].strip() if data['adres'] else None
+        if adres != kisi.adres:  # Adres değiştiyse yeniden geocode
+            kisi.adres = adres
+            kisi.enlem, kisi.boylam = geocode_address(adres)
+    
+    if 'sehir' in data:
+        kisi.sehir = data['sehir'].strip() if data['sehir'] else None
+    
+    if 'ulke' in data:
+        kisi.ulke = data['ulke'].strip() if data['ulke'] else None
+    
+    if 'notlar' in data:
+        kisi.notlar = data['notlar'].strip() if data['notlar'] else None
+    
+    if 'etiketler' in data:
+        kisi.etiketler = data['etiketler'] if isinstance(data['etiketler'], list) else None
+    
+    if 'favori' in data:
+        kisi.favori = bool(data['favori'])
+    
+    db.session.commit()
+    
+    log_action('UPDATE', 'Kisi', kisi_id, guncellemeler)
+    
+    return jsonify({
+        "mesaj": "Kişi başarıyla güncellendi!",
+        "kisi": kisi.to_dict()
+    })
+
+
+@app.route('/kisi/<int:kisi_id>', methods=['DELETE'])
+@jwt_required()
+def kisi_sil(kisi_id):
+    """Kişi sil"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    kisi = Kisi.query.filter_by(id=kisi_id, kullanici_id=kullanici.id).first()
+    if not kisi:
+        return jsonify({"error": "Kişi bulunamadı"}), 404
+    
+    isim = kisi.isim
+    db.session.delete(kisi)
+    db.session.commit()
+    
+    log_action('DELETE', 'Kisi', kisi_id, {'isim': isim})
+    
+    return jsonify({"mesaj": f"'{isim}' başarıyla silindi!"})
+
+
+@app.route('/kisi/<int:kisi_id>/favori', methods=['POST'])
+@jwt_required()
+def kisi_favori_toggle(kisi_id):
+    """Kişi favori durumunu değiştir"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    kisi = Kisi.query.filter_by(id=kisi_id, kullanici_id=kullanici.id).first()
+    if not kisi:
+        return jsonify({"error": "Kişi bulunamadı"}), 404
+    
+    kisi.favori = not kisi.favori
+    db.session.commit()
+    
+    return jsonify({
+        "mesaj": "Favori durumu güncellendi",
+        "favori": kisi.favori
+    })
+
+
+# =============================================================================
+# KISI LISTELEME & ARAMA
+# =============================================================================
 
 @app.route('/kisiler', methods=['GET'])
 @jwt_required()
 def kisiler_listele():
-    sorgu = Kisi.query
-    isim = request.args.get('isim')
-    if isim:
-        sorgu = sorgu.filter(Kisi.isim.ilike(f'%{isim}%'))
-    sirala = request.args.get('sirala')
+    """Tüm kişileri listele (filtreleme ve sıralama destekli)"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    # Base query - sadece kullanıcının kişileri
+    sorgu = Kisi.query.filter_by(kullanici_id=kullanici.id)
+    
+    # Filtreleme
+    arama = request.args.get('arama', '').strip()
+    if arama:
+        sorgu = sorgu.filter(
+            db.or_(
+                Kisi.isim.ilike(f'%{arama}%'),
+                Kisi.soyisim.ilike(f'%{arama}%'),
+                Kisi.eposta.ilike(f'%{arama}%'),
+                Kisi.telefon.ilike(f'%{arama}%'),
+                Kisi.adres.ilike(f'%{arama}%')
+            )
+        )
+    
+    # Etiket filtresi
+    etiket = request.args.get('etiket', '').strip()
+    if etiket:
+        sorgu = sorgu.filter(Kisi.etiketler.contains([etiket]))
+    
+    # Favori filtresi
+    favori = request.args.get('favori', '').lower()
+    if favori == 'true':
+        sorgu = sorgu.filter(Kisi.favori == True)
+    
+    # Sıralama
+    sirala = request.args.get('sirala', 'isim')
+    sira_yonu = request.args.get('sira_yonu', 'asc')
+    
     if sirala == 'isim':
-        sorgu = sorgu.order_by(Kisi.isim)
+        order_col = Kisi.isim
+    elif sirala == 'eposta':
+        order_col = Kisi.eposta
     elif sirala == 'telefon':
-        sorgu = sorgu.order_by(Kisi.telefon)
-    kisiler = sorgu.all()
-    return jsonify([{
-        "isim": kisi.isim,
-        "eposta": kisi.eposta,
-        "telefon": kisi.telefon,
-        "adres": kisi.adres,
-        "enlem": kisi.enlem,
-        "boylam": kisi.boylam
-    } for kisi in kisiler])
+        order_col = Kisi.telefon
+    elif sirala == 'created_at':
+        order_col = Kisi.created_at
+    elif sirala == 'updated_at':
+        order_col = Kisi.updated_at
+    else:
+        order_col = Kisi.isim
+    
+    if sira_yonu == 'desc':
+        sorgu = sorgu.order_by(order_col.desc())
+    else:
+        sorgu = sorgu.order_by(order_col.asc())
+    
+    # Sayfalama
+    sayfa = request.args.get('sayfa', 1, type=int)
+    limit = request.args.get('limit', 50, type=int)
+    limit = min(limit, 100)  # Max 100
+    
+    toplam = sorgu.count()
+    kisiler = sorgu.offset((sayfa - 1) * limit).limit(limit).all()
+    
+    return jsonify({
+        "kisiler": [kisi.to_dict_basic() for kisi in kisiler],
+        "sayfalama": {
+            "mevcut_sayfa": sayfa,
+            "toplam_sayfa": (toplam + limit - 1) // limit,
+            "toplam_kayit": toplam,
+            "limit": limit
+        }
+    })
+
+
+@app.route('/kisi/ara', methods=['GET'])
+@jwt_required()
+def kisi_ara():
+    """Kişi arama (tek sonuç)"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    isim = request.args.get('isim', '').strip()
+    if not isim:
+        return jsonify({"error": "Arama terimi gerekli"}), 400
+    
+    kisi = Kisi.query.filter(
+        Kisi.kullanici_id == kullanici.id,
+        db.or_(
+            Kisi.isim.ilike(f'%{isim}%'),
+            Kisi.soyisim.ilike(f'%{isim}%')
+        )
+    ).first()
+    
+    if not kisi:
+        return jsonify({"error": "Kişi bulunamadı"}), 404
+    
+    return jsonify({"kisi": kisi.to_dict()})
+
+
+@app.route('/kisiler/harita', methods=['GET'])
+@jwt_required()
+def kisiler_harita():
+    """Harita için konum verileri"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    kisiler = Kisi.query.filter(
+        Kisi.kullanici_id == kullanici.id,
+        Kisi.enlem.isnot(None),
+        Kisi.boylam.isnot(None)
+    ).all()
+    
+    return jsonify({
+        "markers": [{
+            "id": kisi.id,
+            "isim": kisi.isim,
+            "soyisim": kisi.soyisim,
+            "tam_isim": f"{kisi.isim} {kisi.soyisim}" if kisi.soyisim else kisi.isim,
+            "adres": kisi.adres,
+            "enlem": kisi.enlem,
+            "boylam": kisi.boylam,
+            "etiketler": kisi.etiketler
+        } for kisi in kisiler],
+        "toplam": len(kisiler)
+    })
+
+
+@app.route('/kisiler/etiketler', methods=['GET'])
+@jwt_required()
+def etiketler_listele():
+    """Tüm etiketleri listele"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    kisiler = Kisi.query.filter_by(kullanici_id=kullanici.id).all()
+    
+    tum_etiketler = set()
+    for kisi in kisiler:
+        if kisi.etiketler:
+            tum_etiketler.update(kisi.etiketler)
+    
+    return jsonify({"etiketler": sorted(list(tum_etiketler))})
+
+
+@app.route('/kisiler/istatistikler', methods=['GET'])
+@jwt_required()
+def istatistikler():
+    """Kişi istatistikleri"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    toplam = Kisi.query.filter_by(kullanici_id=kullanici.id).count()
+    favori = Kisi.query.filter_by(kullanici_id=kullanici.id, favori=True).count()
+    konumlu = Kisi.query.filter(
+        Kisi.kullanici_id == kullanici.id,
+        Kisi.enlem.isnot(None)
+    ).count()
+    epostali = Kisi.query.filter(
+        Kisi.kullanici_id == kullanici.id,
+        Kisi.eposta.isnot(None)
+    ).count()
+    
+    return jsonify({
+        "toplam_kisi": toplam,
+        "favori_kisi": favori,
+        "konumlu_kisi": konumlu,
+        "epostali_kisi": epostali
+    })
+
+
+# =============================================================================
+# EMAIL EXPORT (Legacy endpoint - eski uyumluluk için)
+# =============================================================================
 
 @app.route('/emails/export', methods=['GET'])
 @jwt_required()
 def export_emails():
-    filename = export_emails_to_file()
-    return jsonify({"mesaj": f"E-posta adresleri {filename} dosyasına aktarıldı."})
+    """E-posta adreslerini dışa aktar"""
+    kullanici = get_current_user()
+    if not kullanici:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+    
+    kisiler = Kisi.query.filter(
+        Kisi.kullanici_id == kullanici.id,
+        Kisi.eposta.isnot(None)
+    ).all()
+    
+    emails = [kisi.eposta for kisi in kisiler if kisi.eposta]
+    
+    return jsonify({
+        "mesaj": f"{len(emails)} e-posta adresi bulundu",
+        "emails": emails,
+        "toplam": len(emails)
+    })
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        print("Database tables created successfully!")
+    
     app.run(host='0.0.0.0', debug=True, port=5000)

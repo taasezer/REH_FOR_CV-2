@@ -3,53 +3,355 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kişi Rehberi</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <title>OSINT Rehber | Kişi İstihbarat Sistemi</title>
+    <meta name="description" content="Açık kaynak istihbarat rehber sistemi - Kişi yönetimi ve analizi">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="giris-formu">
-        <h2>Giriş Yap</h2>
-        <input type="text" id="kullaniciAdi" placeholder="Kullanıcı Adı" required>
-        <input type="password" id="sifre" placeholder="Şifre" required>
-        <button id="girisButton">Giriş Yap</button>
-        <p>Hesabınız yok mu? <a href="#" id="kayitLink">Kayıt Ol</a></p>
-    </div>
-
-    <div class="kayit-formu" style="display: none;">
-        <h2>Kayıt Ol</h2>
-        <input type="text" id="yeniKullaniciAdi" placeholder="Kullanıcı Adı" required>
-        <input type="password" id="yeniSifre" placeholder="Şifre" required>
-        <button id="kayitButton">Kayıt Ol</button>
-    </div>
-
-    <div class="container" style="display: none;">
-        <h1>Kişi Rehberi</h1>
-        <form id="kisiForm">
-            <input type="text" id="isim" placeholder="İsim" required>
-            <input type="email" id="eposta" placeholder="E-posta" required>
-            <input type="tel" id="telefon" placeholder="Telefon" required>
-            <input type="text" id="adres" placeholder="Adres" required>
-            <button type="submit">Kişi Ekle</button>
-        </form>
-        <div class="search">
-            <input type="text" id="ara" placeholder="Kişi ara...">
-            <button id="araButton">Ara</button>
+    <!-- ===== AUTH SCREENS ===== -->
+    <div id="authScreen" class="auth-container">
+        <!-- Login Form -->
+        <div id="loginForm" class="auth-card">
+            <div class="auth-header">
+                <div class="logo">
+                    <span class="logo-icon">◉</span>
+                    <span class="logo-text">OSINT<span class="accent">Rehber</span></span>
+                </div>
+                <p class="auth-subtitle">Kişi İstihbarat Sistemi</p>
+            </div>
+            
+            <form id="loginFormElement">
+                <div class="form-group">
+                    <label for="loginUsername">Kullanıcı Adı</label>
+                    <input type="text" id="loginUsername" placeholder="Kullanıcı adınız" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Şifre</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">
+                    <span>Giriş Yap</span>
+                    <span class="btn-icon">→</span>
+                </button>
+            </form>
+            
+            <div class="auth-footer">
+                <span>Hesabınız yok mu?</span>
+                <a href="#" id="showRegister">Kayıt Ol</a>
+            </div>
         </div>
-        <div class="filtreleme">
-            <select id="sirala">
-                <option value="">Varsayılan</option>
-                <option value="isim">İsme Göre</option>
-                <option value="telefon">Telefona Göre</option>
-            </select>
-            <button id="filtreleButton">Filtrele</button>
+
+        <!-- Register Form -->
+        <div id="registerForm" class="auth-card" style="display: none;">
+            <div class="auth-header">
+                <div class="logo">
+                    <span class="logo-icon">◉</span>
+                    <span class="logo-text">OSINT<span class="accent">Rehber</span></span>
+                </div>
+                <p class="auth-subtitle">Yeni Hesap Oluştur</p>
+            </div>
+            
+            <form id="registerFormElement">
+                <div class="form-group">
+                    <label for="registerUsername">Kullanıcı Adı</label>
+                    <input type="text" id="registerUsername" placeholder="En az 3 karakter" required minlength="3">
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">E-posta (Opsiyonel)</label>
+                    <input type="email" id="registerEmail" placeholder="ornek@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Şifre</label>
+                    <input type="password" id="registerPassword" placeholder="En az 6 karakter" required minlength="6">
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">
+                    <span>Kayıt Ol</span>
+                    <span class="btn-icon">→</span>
+                </button>
+            </form>
+            
+            <div class="auth-footer">
+                <span>Zaten hesabınız var mı?</span>
+                <a href="#" id="showLogin">Giriş Yap</a>
+            </div>
         </div>
-        <button id="exportEmailsButton">E-postaları Dışa Aktar</button>
-        <div id="sonuclar"></div>
-        <div id="harita"></div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <!-- ===== MAIN APP ===== -->
+    <div id="mainApp" class="app-container" style="display: none;">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">◉</span>
+                    <span class="logo-text">OSINT<span class="accent">Rehber</span></span>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-view="dashboard">
+                    <span class="nav-icon">⊞</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-view="contacts">
+                    <span class="nav-icon">◎</span>
+                    <span>Kişiler</span>
+                </a>
+                <a href="#" class="nav-item" data-view="map">
+                    <span class="nav-icon">◈</span>
+                    <span>Harita</span>
+                </a>
+                <a href="#" class="nav-item" data-view="add">
+                    <span class="nav-icon">⊕</span>
+                    <span>Kişi Ekle</span>
+                </a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <span class="user-avatar">◉</span>
+                    <span id="currentUsername">Kullanıcı</span>
+                </div>
+                <button id="logoutBtn" class="btn btn-ghost btn-sm">Çıkış</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="main-header">
+                <div class="header-left">
+                    <h1 id="pageTitle">Dashboard</h1>
+                </div>
+                <div class="header-right">
+                    <div class="search-box">
+                        <input type="text" id="globalSearch" placeholder="Kişi ara...">
+                        <span class="search-icon">⌕</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Views Container -->
+            <div class="views-container">
+                <!-- Dashboard View -->
+                <div id="dashboardView" class="view active">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">◎</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="statTotalContacts">0</span>
+                                <span class="stat-label">Toplam Kişi</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">★</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="statFavorites">0</span>
+                                <span class="stat-label">Favori</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">◈</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="statWithLocation">0</span>
+                                <span class="stat-label">Konumlu</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">✉</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="statWithEmail">0</span>
+                                <span class="stat-label">E-postalı</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dashboard-widgets">
+                        <div class="widget">
+                            <div class="widget-header">
+                                <h3>Son Eklenen Kişiler</h3>
+                            </div>
+                            <div class="widget-content" id="recentContacts">
+                                <p class="empty-state">Henüz kişi eklenmemiş</p>
+                            </div>
+                        </div>
+                        <div class="widget">
+                            <div class="widget-header">
+                                <h3>Hızlı Harita</h3>
+                            </div>
+                            <div class="widget-content">
+                                <div id="miniMap" class="mini-map"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contacts View -->
+                <div id="contactsView" class="view">
+                    <div class="contacts-toolbar">
+                        <div class="toolbar-left">
+                            <select id="filterTag" class="select-input">
+                                <option value="">Tüm Etiketler</option>
+                            </select>
+                            <select id="sortBy" class="select-input">
+                                <option value="isim">İsme Göre</option>
+                                <option value="created_at">Tarihe Göre</option>
+                                <option value="eposta">E-postaya Göre</option>
+                            </select>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="filterFavorites">
+                                <span>Sadece Favoriler</span>
+                            </label>
+                        </div>
+                        <div class="toolbar-right">
+                            <button id="exportEmailsBtn" class="btn btn-secondary btn-sm">
+                                ✉ E-postaları Dışa Aktar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="contactsList" class="contacts-grid">
+                        <p class="empty-state">Yükleniyor...</p>
+                    </div>
+                    
+                    <div id="pagination" class="pagination"></div>
+                </div>
+
+                <!-- Map View -->
+                <div id="mapView" class="view">
+                    <div id="fullMap" class="full-map"></div>
+                </div>
+
+                <!-- Add/Edit Contact View -->
+                <div id="addView" class="view">
+                    <div class="form-container">
+                        <h2 id="formTitle">Yeni Kişi Ekle</h2>
+                        <form id="contactForm">
+                            <input type="hidden" id="editContactId">
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="contactName">İsim *</label>
+                                    <input type="text" id="contactName" placeholder="Adı" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="contactSurname">Soyisim</label>
+                                    <input type="text" id="contactSurname" placeholder="Soyadı">
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="contactEmail">E-posta</label>
+                                    <input type="email" id="contactEmail" placeholder="ornek@email.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="contactPhone">Telefon</label>
+                                    <input type="tel" id="contactPhone" placeholder="+90 555 123 4567">
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="contactPhone2">İkinci Telefon</label>
+                                <input type="tel" id="contactPhone2" placeholder="+90 555 987 6543">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="contactAddress">Adres</label>
+                                <textarea id="contactAddress" placeholder="Tam adres (geocoding için)" rows="2"></textarea>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="contactCity">Şehir</label>
+                                    <input type="text" id="contactCity" placeholder="Şehir">
+                                </div>
+                                <div class="form-group">
+                                    <label for="contactCountry">Ülke</label>
+                                    <input type="text" id="contactCountry" placeholder="Ülke" value="Türkiye">
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="contactTags">Etiketler</label>
+                                <input type="text" id="contactTags" placeholder="aile, iş, arkadaş (virgülle ayırın)">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="contactNotes">Notlar</label>
+                                <textarea id="contactNotes" placeholder="Ek notlar..." rows="3"></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="contactFavorite">
+                                    <span>Favori olarak işaretle</span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button type="button" id="cancelEdit" class="btn btn-secondary" style="display: none;">İptal</button>
+                                <button type="submit" class="btn btn-primary">
+                                    <span id="submitBtnText">Kişi Ekle</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Contact Detail Modal -->
+    <div id="contactModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalContactName">Kişi Detayı</h2>
+                <button class="modal-close" id="closeModal">×</button>
+            </div>
+            <div class="modal-body" id="modalContactDetails">
+                <!-- Dynamically filled -->
+            </div>
+            <div class="modal-footer">
+                <button id="modalEditBtn" class="btn btn-secondary">Düzenle</button>
+                <button id="modalDeleteBtn" class="btn btn-danger">Sil</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Silme Onayı</h2>
+                <button class="modal-close" id="closeDeleteModal">×</button>
+            </div>
+            <div class="modal-body">
+                <p>Bu kişiyi silmek istediğinize emin misiniz?</p>
+                <p class="text-muted" id="deleteContactName"></p>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelDelete" class="btn btn-secondary">İptal</button>
+                <button id="confirmDelete" class="btn btn-danger">Sil</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

@@ -1,7 +1,25 @@
-flask
-flask-sqlalchemy
-flask-jwt-extended
-psycopg2-binary
-geopy
-bcrypt
-email-validator
+# REH_FOR_CV-2 OSINT Rehber - Python Dependencies
+# Phase 1: Core CRUD & Security
+
+# Flask Core
+flask>=2.3.0
+flask-sqlalchemy>=3.1.0
+flask-jwt-extended>=4.6.0
+flask-cors>=4.0.0
+flask-limiter>=3.5.0
+
+# Database
+psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.0
+
+# Security
+werkzeug>=3.0.0
+
+# Geocoding
+geopy>=2.4.0
+
+# Validation
+email-validator>=2.1.0
+
+# Utils
+python-dotenv>=1.0.0
