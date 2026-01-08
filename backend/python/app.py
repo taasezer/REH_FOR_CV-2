@@ -1802,6 +1802,421 @@ def comprehensive_domain_check():
 
 
 # =============================================================================
+# PHASE 7: REPORTING AND IMPORT/EXPORT ENDPOINTS
+# =============================================================================
+
+@app.route('/api/export/csv', methods=['GET'])
+@jwt_required()
+def export_csv():
+    """CSV export"""
+    try:
+        from reporting import ExportManager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        kisiler = Kisi.query.filter_by(kullanici_id=kullanici.id).all()
+        contacts = [k.to_dict() for k in kisiler]
+        
+        manager = ExportManager()
+        result = manager.export_to_csv(contacts)
+        
+        if result['success']:
+            log_action('export', 'csv', None, kullanici.id, f"{len(contacts)} kişi export edildi")
+            
+            from flask import Response
+            return Response(
+                result['content'],
+                mimetype=result['mime_type'],
+                headers={'Content-Disposition': f'attachment; filename={result["filename"]}'}
+            )
+        else:
+            return jsonify({"error": result.get('error', 'Export hatası')}), 500
+            
+    except ImportError:
+        return jsonify({"error": "Reporting modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/export/vcard', methods=['GET'])
+@jwt_required()
+def export_vcard():
+    """vCard export"""
+    try:
+        from reporting import ExportManager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        kisiler = Kisi.query.filter_by(kullanici_id=kullanici.id).all()
+        contacts = [k.to_dict() for k in kisiler]
+        
+        manager = ExportManager()
+        result = manager.export_to_vcard(contacts)
+        
+        if result['success']:
+            log_action('export', 'vcard', None, kullanici.id, f"{len(contacts)} kişi export edildi")
+            
+            from flask import Response
+            return Response(
+                result['content'],
+                mimetype=result['mime_type'],
+                headers={'Content-Disposition': f'attachment; filename={result["filename"]}'}
+            )
+        else:
+            return jsonify({"error": result.get('error', 'Export hatası')}), 500
+            
+    except ImportError:
+        return jsonify({"error": "Reporting modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/export/json', methods=['GET'])
+@jwt_required()
+def export_json():
+    """JSON export"""
+    try:
+        from reporting import ExportManager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        kisiler = Kisi.query.filter_by(kullanici_id=kullanici.id).all()
+        contacts = [k.to_dict() for k in kisiler]
+        
+        manager = ExportManager()
+        result = manager.export_to_json(contacts)
+        
+        if result['success']:
+            log_action('export', 'json', None, kullanici.id, f"{len(contacts)} kişi export edildi")
+            
+            from flask import Response
+            return Response(
+                result['content'],
+                mimetype=result['mime_type'],
+                headers={'Content-Disposition': f'attachment; filename={result["filename"]}'}
+            )
+        else:
+            return jsonify({"error": result.get('error', 'Export hatası')}), 500
+            
+    except ImportError:
+        return jsonify({"error": "Reporting modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/export/report', methods=['GET'])
+@jwt_required()
+def export_html_report():
+    """HTML rapor export"""
+    try:
+        from reporting import ExportManager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        kisiler = Kisi.query.filter_by(kullanici_id=kullanici.id).all()
+        contacts = [k.to_dict() for k in kisiler]
+        
+        title = request.args.get('title', 'OSINT Rehber Raporu')
+        
+        manager = ExportManager()
+        result = manager.export_to_html(contacts, title)
+        
+        if result['success']:
+            log_action('export', 'report', None, kullanici.id, f"{len(contacts)} kişi raporu")
+            
+            from flask import Response
+            return Response(
+                result['content'],
+                mimetype=result['mime_type'],
+                headers={'Content-Disposition': f'attachment; filename={result["filename"]}'}
+            )
+        else:
+            return jsonify({"error": result.get('error', 'Export hatası')}), 500
+            
+    except ImportError:
+        return jsonify({"error": "Reporting modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/import/csv', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def import_csv():
+    """CSV import"""
+    try:
+        from reporting import ImportManager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        # Dosya veya içerik al
+        if 'file' in request.files:
+            file = request.files['file']
+            content = file.read().decode('utf-8-sig')
+        else:
+            data = request.get_json()
+            content = data.get('content', '')
+        
+        if not content:
+            return jsonify({"error": "İçerik bulunamadı"}), 400
+        
+        manager = ImportManager()
+        result = manager.import_from_csv(content)
+        
+        if result['success'] and result['contacts']:
+            # Kişileri veritabanına ekle
+            added = 0
+            for contact in result['contacts']:
+                kisi = Kisi(
+                    kullanici_id=kullanici.id,
+                    isim=contact.get('isim', ''),
+                    soyisim=contact.get('soyisim', ''),
+                    eposta=contact.get('eposta', ''),
+                    telefon=contact.get('telefon', ''),
+                    telefon_2=contact.get('telefon_2', ''),
+                    adres=contact.get('adres', ''),
+                    sehir=contact.get('sehir', ''),
+                    ulke=contact.get('ulke', ''),
+                    notlar=contact.get('notlar', ''),
+                    etiketler=contact.get('etiketler', []),
+                    favori=contact.get('favori', False)
+                )
+                db.session.add(kisi)
+                added += 1
+            
+            db.session.commit()
+            log_action('import', 'csv', None, kullanici.id, f"{added} kişi import edildi")
+            
+            return jsonify({
+                "mesaj": f"{added} kişi başarıyla import edildi",
+                "imported": added,
+                "errors": result.get('errors', [])
+            })
+        else:
+            return jsonify({
+                "error": result.get('error', 'Import hatası'),
+                "errors": result.get('errors', [])
+            }), 400
+            
+    except ImportError:
+        return jsonify({"error": "Reporting modülü yüklenemedi"}), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/import/vcard', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def import_vcard():
+    """vCard import"""
+    try:
+        from reporting import ImportManager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        if 'file' in request.files:
+            file = request.files['file']
+            content = file.read().decode('utf-8-sig')
+        else:
+            data = request.get_json()
+            content = data.get('content', '')
+        
+        if not content:
+            return jsonify({"error": "İçerik bulunamadı"}), 400
+        
+        manager = ImportManager()
+        result = manager.import_from_vcard(content)
+        
+        if result['success'] and result['contacts']:
+            added = 0
+            for contact in result['contacts']:
+                kisi = Kisi(
+                    kullanici_id=kullanici.id,
+                    isim=contact.get('isim', ''),
+                    soyisim=contact.get('soyisim', ''),
+                    eposta=contact.get('eposta', ''),
+                    telefon=contact.get('telefon', ''),
+                    telefon_2=contact.get('telefon_2', ''),
+                    adres=contact.get('adres', ''),
+                    sehir=contact.get('sehir', ''),
+                    ulke=contact.get('ulke', ''),
+                    notlar=contact.get('notlar', ''),
+                    etiketler=contact.get('etiketler', []),
+                    favori=False
+                )
+                db.session.add(kisi)
+                added += 1
+            
+            db.session.commit()
+            log_action('import', 'vcard', None, kullanici.id, f"{added} kişi import edildi")
+            
+            return jsonify({
+                "mesaj": f"{added} kişi başarıyla import edildi",
+                "imported": added,
+                "errors": result.get('errors', [])
+            })
+        else:
+            return jsonify({
+                "error": result.get('error', 'Import hatası'),
+                "errors": result.get('errors', [])
+            }), 400
+            
+    except ImportError:
+        return jsonify({"error": "Reporting modülü yüklenemedi"}), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/import/json', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def import_json():
+    """JSON import"""
+    try:
+        from reporting import ImportManager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        if 'file' in request.files:
+            file = request.files['file']
+            content = file.read().decode('utf-8-sig')
+        else:
+            data = request.get_json()
+            content = data.get('content', '')
+        
+        if not content:
+            return jsonify({"error": "İçerik bulunamadı"}), 400
+        
+        manager = ImportManager()
+        result = manager.import_from_json(content)
+        
+        if result['success'] and result['contacts']:
+            added = 0
+            for contact in result['contacts']:
+                kisi = Kisi(
+                    kullanici_id=kullanici.id,
+                    isim=contact.get('isim', ''),
+                    soyisim=contact.get('soyisim', ''),
+                    eposta=contact.get('eposta', ''),
+                    telefon=contact.get('telefon', ''),
+                    telefon_2=contact.get('telefon_2', ''),
+                    adres=contact.get('adres', ''),
+                    sehir=contact.get('sehir', ''),
+                    ulke=contact.get('ulke', ''),
+                    notlar=contact.get('notlar', ''),
+                    etiketler=contact.get('etiketler', []),
+                    favori=contact.get('favori', False)
+                )
+                db.session.add(kisi)
+                added += 1
+            
+            db.session.commit()
+            log_action('import', 'json', None, kullanici.id, f"{added} kişi import edildi")
+            
+            return jsonify({
+                "mesaj": f"{added} kişi başarıyla import edildi",
+                "imported": added,
+                "errors": result.get('errors', [])
+            })
+        else:
+            return jsonify({
+                "error": result.get('error', 'Import hatası'),
+                "errors": result.get('errors', [])
+            }), 400
+            
+    except ImportError:
+        return jsonify({"error": "Reporting modülü yüklenemedi"}), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/import/auto', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def import_auto():
+    """Otomatik format algılama ile import"""
+    try:
+        from reporting import ImportManager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        filename = None
+        if 'file' in request.files:
+            file = request.files['file']
+            filename = file.filename
+            content = file.read().decode('utf-8-sig')
+        else:
+            data = request.get_json()
+            content = data.get('content', '')
+            filename = data.get('filename')
+        
+        if not content:
+            return jsonify({"error": "İçerik bulunamadı"}), 400
+        
+        manager = ImportManager()
+        result = manager.detect_format_and_import(content, filename)
+        
+        if result['success'] and result['contacts']:
+            added = 0
+            for contact in result['contacts']:
+                kisi = Kisi(
+                    kullanici_id=kullanici.id,
+                    isim=contact.get('isim', ''),
+                    soyisim=contact.get('soyisim', ''),
+                    eposta=contact.get('eposta', ''),
+                    telefon=contact.get('telefon', ''),
+                    telefon_2=contact.get('telefon_2', ''),
+                    adres=contact.get('adres', ''),
+                    sehir=contact.get('sehir', ''),
+                    ulke=contact.get('ulke', ''),
+                    notlar=contact.get('notlar', ''),
+                    etiketler=contact.get('etiketler', []),
+                    favori=contact.get('favori', False)
+                )
+                db.session.add(kisi)
+                added += 1
+            
+            db.session.commit()
+            log_action('import', 'auto', None, kullanici.id, f"{added} kişi import edildi")
+            
+            return jsonify({
+                "mesaj": f"{added} kişi başarıyla import edildi",
+                "imported": added,
+                "errors": result.get('errors', [])
+            })
+        else:
+            return jsonify({
+                "error": result.get('error', 'Import hatası'),
+                "errors": result.get('errors', [])
+            }), 400
+            
+    except ImportError:
+        return jsonify({"error": "Reporting modülü yüklenemedi"}), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -1811,6 +2226,7 @@ if __name__ == '__main__':
         print("Database tables created successfully!")
     
     app.run(host='0.0.0.0', debug=True, port=5000)
+
 
 
 

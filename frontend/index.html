@@ -169,6 +169,27 @@
                         <input type="text" id="globalSearch" placeholder="Kişi ara... (Ctrl+K)" aria-label="Kişi ara">
                         <span class="search-icon">⌕</span>
                     </div>
+                    <!-- Export/Import Dropdown -->
+                    <div class="dropdown" id="exportDropdown">
+                        <button class="btn btn-secondary dropdown-toggle" id="exportBtn">
+                            📥 Dışa/İçe Aktar
+                        </button>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-section">
+                                <span class="dropdown-label">Dışa Aktar</span>
+                                <button class="dropdown-item" data-export="csv">📊 CSV</button>
+                                <button class="dropdown-item" data-export="json">📄 JSON</button>
+                                <button class="dropdown-item" data-export="vcard">👤 vCard</button>
+                                <button class="dropdown-item" data-export="report">📑 HTML Rapor</button>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-section">
+                                <span class="dropdown-label">İçe Aktar</span>
+                                <button class="dropdown-item" id="importFileBtn">📁 Dosya Yükle</button>
+                                <input type="file" id="importFileInput" accept=".csv,.json,.vcf,.vcard" hidden>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </header>
 

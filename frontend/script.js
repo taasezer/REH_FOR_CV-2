@@ -1980,6 +1980,150 @@ function initOsintEvents() {
 }
 
 // =============================================================================
+// PHASE 7: EXPORT/IMPORT
+// =============================================================================
+
+/**
+ * Export contacts in specified format
+ */
+async function exportContacts(format) {
+    showToast('Bilgi', `${format.toUpperCase()} hazırlanıyor...`, 'warning');
+
+    try {
+        const response = await apiRequest(`/api/export/${format}`);
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = `kisiler.${format}`;
+
+            if (contentDisposition) {
+                const match = contentDisposition.match(/filename=(.+)/);
+                if (match) filename = match[1];
+            }
+
+            // Download
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast('Başarılı', `${format.toUpperCase()} dosyası indirildi`, 'success');
+        } else {
+            const data = await response.json();
+            showToast('Hata', data.error || 'Export başarısız', 'error');
+        }
+    } catch (error) {
+        showToast('Hata', 'Bağlantı hatası', 'error');
+    }
+}
+
+/**
+ * Import contacts from file
+ */
+async function importContacts(file) {
+    if (!file) return;
+
+    showToast('Bilgi', 'Dosya işleniyor...', 'warning');
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_BASE}/api/import/auto`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${state.accessToken}`
+            },
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast('Başarılı', data.mesaj || `${data.imported} kişi import edildi`, 'success');
+
+            if (data.errors && data.errors.length > 0) {
+                console.warn('Import errors:', data.errors);
+            }
+
+            // Refresh contacts list
+            loadContacts();
+            loadDashboard();
+        } else {
+            showToast('Hata', data.error || 'Import başarısız', 'error');
+        }
+    } catch (error) {
+        showToast('Hata', 'Bağlantı hatası', 'error');
+    }
+}
+
+/**
+ * Toggle dropdown menu
+ */
+function toggleDropdown(dropdownId) {
+    const dropdown = document.getElementById(dropdownId);
+    if (dropdown) {
+        dropdown.classList.toggle('open');
+    }
+}
+
+/**
+ * Close all dropdowns
+ */
+function closeAllDropdowns() {
+    document.querySelectorAll('.dropdown.open').forEach(d => {
+        d.classList.remove('open');
+    });
+}
+
+/**
+ * Initialize export/import events
+ */
+function initExportImportEvents() {
+    // Dropdown toggle
+    document.getElementById('exportBtn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleDropdown('exportDropdown');
+    });
+
+    // Export buttons
+    document.querySelectorAll('[data-export]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const format = e.target.dataset.export;
+            exportContacts(format);
+            closeAllDropdowns();
+        });
+    });
+
+    // Import file button
+    document.getElementById('importFileBtn')?.addEventListener('click', () => {
+        document.getElementById('importFileInput')?.click();
+        closeAllDropdowns();
+    });
+
+    // Import file input
+    document.getElementById('importFileInput')?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            importContacts(file);
+            e.target.value = ''; // Reset
+        }
+    });
+
+    // Close dropdown on outside click
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.dropdown')) {
+            closeAllDropdowns();
+        }
+    });
+}
+
+// =============================================================================
 // EVENT LISTENERS
 // =============================================================================
 
@@ -1999,6 +2143,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Phase 6: Initialize OSINT events
     initOsintEvents();
+
+    // Phase 7: Initialize export/import events
+    initExportImportEvents();
 
     // Auth form toggles
     document.getElementById('showRegister')?.addEventListener('click', (e) => {
