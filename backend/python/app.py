@@ -698,6 +698,248 @@ def export_emails():
 
 
 # =============================================================================
+# PHASE 3: DATA ENRICHMENT ENDPOINTS
+# =============================================================================
+
+@app.route('/enrich/email', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def enrich_email():
+    """E-posta zenginleştirme"""
+    try:
+        from enrichment import EmailEnricher
+        
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "E-posta adresi gerekli"}), 400
+        
+        result = EmailEnricher.enrich(email)
+        
+        return jsonify({
+            "mesaj": "E-posta analiz edildi",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Enrichment modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/enrich/phone', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def enrich_phone():
+    """Telefon zenginleştirme"""
+    try:
+        from enrichment import PhoneEnricher
+        
+        data = request.get_json()
+        phone = data.get('phone') or data.get('telefon')
+        
+        if not phone:
+            return jsonify({"error": "Telefon numarası gerekli"}), 400
+        
+        result = PhoneEnricher.enrich(phone)
+        
+        return jsonify({
+            "mesaj": "Telefon analiz edildi",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Enrichment modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/enrich/social', methods=['POST'])
+@jwt_required()
+@limiter.limit("5 per minute")
+def enrich_social():
+    """Sosyal medya profil araması"""
+    try:
+        from social_lookup import lookup_social_profiles
+        
+        data = request.get_json()
+        email = data.get('email')
+        username = data.get('username')
+        platforms = data.get('platforms')  # Opsiyonel liste
+        
+        if not email and not username:
+            return jsonify({"error": "E-posta veya kullanıcı adı gerekli"}), 400
+        
+        result = lookup_social_profiles(
+            email=email,
+            username=username,
+            platforms=platforms
+        )
+        
+        return jsonify({
+            "mesaj": "Sosyal medya araması tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Social lookup modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/kisi/<int:kisi_id>/enrich', methods=['POST'])
+@jwt_required()
+@limiter.limit("5 per minute")
+def enrich_contact(kisi_id):
+    """Kişi için tam zenginleştirme"""
+    try:
+        from enrichment import EmailEnricher, PhoneEnricher
+        from social_lookup import lookup_social_profiles
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        kisi = Kisi.query.filter_by(id=kisi_id, kullanici_id=kullanici.id).first()
+        if not kisi:
+            return jsonify({"error": "Kişi bulunamadı"}), 404
+        
+        result = {
+            "kisi_id": kisi.id,
+            "tam_isim": kisi.tam_isim,
+            "email_enrichment": None,
+            "phone_enrichment": None,
+            "social_profiles": None
+        }
+        
+        # E-posta analizi
+        if kisi.eposta:
+            email_result = EmailEnricher.enrich(kisi.eposta)
+            result["email_enrichment"] = email_result
+            
+            # Veritabanına kaydet
+            if email_result.get('valid'):
+                kisi.email_valid = True
+                kisi.email_type = email_result.get('email_type')
+        
+        # Telefon analizi
+        if kisi.telefon:
+            phone_result = PhoneEnricher.enrich(kisi.telefon)
+            result["phone_enrichment"] = phone_result
+            
+            # Veritabanına kaydet
+            if phone_result.get('valid'):
+                kisi.phone_country = phone_result.get('country_code')
+                kisi.phone_carrier = phone_result.get('carrier')
+                kisi.phone_type = phone_result.get('phone_type')
+        
+        # Sosyal medya araması
+        if kisi.eposta:
+            social_result = lookup_social_profiles(email=kisi.eposta)
+            result["social_profiles"] = social_result
+            
+            # Bulunan profilleri kaydet
+            if social_result.get('social_profiles', {}).get('found_profiles'):
+                profiles = {}
+                for profile in social_result['social_profiles']['found_profiles']:
+                    platform = profile.get('platform')
+                    url = profile.get('url')
+                    if platform and url:
+                        profiles[platform] = url
+                
+                if profiles:
+                    kisi.social_profiles = profiles
+        
+        # Enriched timestamp güncelle
+        from datetime import datetime
+        kisi.enriched_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        # Audit log
+        log_action('enrich', 'kisi', kisi_id, kullanici.id, f"Kişi zenginleştirildi")
+        
+        return jsonify({
+            "mesaj": "Kişi zenginleştirme tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError as e:
+        return jsonify({"error": f"Modül yüklenemedi: {str(e)}"}), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/kisiler/enrich-all', methods=['POST'])
+@jwt_required()
+@limiter.limit("1 per minute")
+def enrich_all_contacts():
+    """Tüm kişileri zenginleştir (rate limited)"""
+    try:
+        from enrichment import EmailEnricher, PhoneEnricher
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        # Sadece henüz zenginleştirilmemiş kişileri al
+        kisiler = Kisi.query.filter(
+            Kisi.kullanici_id == kullanici.id,
+            Kisi.enriched_at.is_(None)
+        ).limit(10).all()  # Maksimum 10 kişi
+        
+        enriched_count = 0
+        errors = []
+        
+        for kisi in kisiler:
+            try:
+                # E-posta analizi
+                if kisi.eposta:
+                    email_result = EmailEnricher.enrich(kisi.eposta)
+                    if email_result.get('valid'):
+                        kisi.email_valid = True
+                        kisi.email_type = email_result.get('email_type')
+                
+                # Telefon analizi
+                if kisi.telefon:
+                    phone_result = PhoneEnricher.enrich(kisi.telefon)
+                    if phone_result.get('valid'):
+                        kisi.phone_country = phone_result.get('country_code')
+                        kisi.phone_carrier = phone_result.get('carrier')
+                        kisi.phone_type = phone_result.get('phone_type')
+                
+                from datetime import datetime
+                kisi.enriched_at = datetime.utcnow()
+                enriched_count += 1
+                
+            except Exception as e:
+                errors.append({"kisi_id": kisi.id, "error": str(e)})
+        
+        db.session.commit()
+        
+        # Kalan kişi sayısı
+        remaining = Kisi.query.filter(
+            Kisi.kullanici_id == kullanici.id,
+            Kisi.enriched_at.is_(None)
+        ).count()
+        
+        return jsonify({
+            "mesaj": f"{enriched_count} kişi zenginleştirildi",
+            "zenginlestirilen": enriched_count,
+            "hatalar": errors,
+            "kalan": remaining
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Enrichment modülü yüklenemedi"}), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -707,3 +949,4 @@ if __name__ == '__main__':
         print("Database tables created successfully!")
     
     app.run(host='0.0.0.0', debug=True, port=5000)
+

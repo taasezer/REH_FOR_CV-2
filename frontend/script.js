@@ -752,6 +752,256 @@ async function exportEmails() {
 }
 
 // =============================================================================
+// PHASE 3: DATA ENRICHMENT
+// =============================================================================
+
+/**
+ * Enrich a single contact
+ */
+async function enrichContact(contactId) {
+    showToast('Bilgi', 'Kişi zenginleştiriliyor...', 'warning');
+
+    try {
+        const response = await apiRequest(`/kisi/${contactId}/enrich`, {
+            method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast('Başarılı', 'Kişi zenginleştirildi!', 'success');
+
+            // Show enrichment results in modal
+            showEnrichmentResults(data.sonuc);
+
+            // Refresh contact detail if open
+            if (state.selectedContact?.id === contactId) {
+                showContactDetail(contactId);
+            }
+        } else {
+            showToast('Hata', data.error || 'Zenginleştirme başarısız', 'error');
+        }
+    } catch (error) {
+        showToast('Hata', 'Sunucuya bağlanılamadı', 'error');
+    }
+}
+
+/**
+ * Enrich all contacts (batch)
+ */
+async function enrichAllContacts() {
+    showToast('Bilgi', 'Toplu zenginleştirme başlatıldı...', 'warning');
+
+    try {
+        const response = await apiRequest('/kisiler/enrich-all', {
+            method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast('Başarılı', `${data.zenginlestirilen} kişi zenginleştirildi. Kalan: ${data.kalan}`, 'success');
+            loadContacts();
+        } else {
+            showToast('Hata', data.error || 'Zenginleştirme başarısız', 'error');
+        }
+    } catch (error) {
+        showToast('Hata', 'Sunucuya bağlanılamadı', 'error');
+    }
+}
+
+/**
+ * Analyze email address
+ */
+async function analyzeEmail(email) {
+    try {
+        const response = await apiRequest('/enrich/email', {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        });
+
+        const data = await response.json();
+        return data.sonuc;
+    } catch (error) {
+        console.error('Email analysis error:', error);
+        return null;
+    }
+}
+
+/**
+ * Analyze phone number
+ */
+async function analyzePhone(phone) {
+    try {
+        const response = await apiRequest('/enrich/phone', {
+            method: 'POST',
+            body: JSON.stringify({ phone })
+        });
+
+        const data = await response.json();
+        return data.sonuc;
+    } catch (error) {
+        console.error('Phone analysis error:', error);
+        return null;
+    }
+}
+
+/**
+ * Search social media profiles
+ */
+async function searchSocialProfiles(email = null, username = null) {
+    try {
+        const response = await apiRequest('/enrich/social', {
+            method: 'POST',
+            body: JSON.stringify({ email, username })
+        });
+
+        const data = await response.json();
+        return data.sonuc;
+    } catch (error) {
+        console.error('Social search error:', error);
+        return null;
+    }
+}
+
+/**
+ * Show enrichment results in a modal or section
+ */
+function showEnrichmentResults(results) {
+    if (!results) return;
+
+    let html = '<div class="enrichment-results">';
+
+    // Email enrichment
+    if (results.email_enrichment) {
+        const e = results.email_enrichment;
+        html += `
+            <div class="enrichment-section">
+                <h4>📧 E-posta Analizi</h4>
+                <div class="enrichment-grid">
+                    <div class="enrichment-item">
+                        <span class="label">Geçerli:</span>
+                        <span class="value ${e.valid ? 'success' : 'error'}">${e.valid ? 'Evet' : 'Hayır'}</span>
+                    </div>
+                    <div class="enrichment-item">
+                        <span class="label">Tip:</span>
+                        <span class="value">${getEmailTypeLabel(e.email_type)}</span>
+                    </div>
+                    <div class="enrichment-item">
+                        <span class="label">Domain:</span>
+                        <span class="value">${e.domain || '-'}</span>
+                    </div>
+                    <div class="enrichment-item">
+                        <span class="label">MX Kaydı:</span>
+                        <span class="value ${e.has_mx_record ? 'success' : 'warning'}">${e.has_mx_record ? 'Var' : 'Yok'}</span>
+                    </div>
+                    ${e.has_gravatar ? `
+                    <div class="enrichment-item">
+                        <span class="label">Gravatar:</span>
+                        <img src="${e.gravatar_url}" alt="Gravatar" class="gravatar-mini">
+                    </div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    // Phone enrichment
+    if (results.phone_enrichment) {
+        const p = results.phone_enrichment;
+        html += `
+            <div class="enrichment-section">
+                <h4>📱 Telefon Analizi</h4>
+                <div class="enrichment-grid">
+                    <div class="enrichment-item">
+                        <span class="label">Ülke:</span>
+                        <span class="value">${p.country || '-'}</span>
+                    </div>
+                    <div class="enrichment-item">
+                        <span class="label">Tip:</span>
+                        <span class="value">${getPhoneTypeLabel(p.phone_type)}</span>
+                    </div>
+                    ${p.carrier ? `
+                    <div class="enrichment-item">
+                        <span class="label">Operatör:</span>
+                        <span class="value">${p.carrier}</span>
+                    </div>` : ''}
+                    <div class="enrichment-item">
+                        <span class="label">Format:</span>
+                        <span class="value">${p.international_format || '-'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Social profiles
+    if (results.social_profiles?.social_profiles?.found_profiles?.length > 0) {
+        const profiles = results.social_profiles.social_profiles.found_profiles;
+        html += `
+            <div class="enrichment-section">
+                <h4>🌐 Sosyal Medya Profilleri</h4>
+                <div class="social-profiles">
+                    ${profiles.map(p => `
+                        <a href="${p.url}" target="_blank" class="social-profile-link badge badge-${p.platform}">
+                            ${p.icon || '🔗'} ${p.platform_name || p.platform}
+                        </a>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+
+    // Create or update enrichment modal
+    let enrichModal = document.getElementById('enrichmentModal');
+    if (!enrichModal) {
+        enrichModal = document.createElement('div');
+        enrichModal.id = 'enrichmentModal';
+        enrichModal.className = 'modal';
+        enrichModal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Zenginleştirme Sonuçları</h2>
+                    <button class="btn btn-ghost" onclick="closeEnrichmentModal()">✕</button>
+                </div>
+                <div class="modal-body" id="enrichmentContent"></div>
+            </div>
+        `;
+        document.body.appendChild(enrichModal);
+    }
+
+    document.getElementById('enrichmentContent').innerHTML = html;
+    enrichModal.classList.add('active');
+}
+
+function closeEnrichmentModal() {
+    const modal = document.getElementById('enrichmentModal');
+    if (modal) modal.classList.remove('active');
+}
+
+function getEmailTypeLabel(type) {
+    const labels = {
+        'personal': '👤 Kişisel',
+        'corporate': '🏢 Kurumsal',
+        'disposable': '⚠️ Tek Kullanımlık',
+        'educational': '🎓 Eğitim',
+        'government': '🏛️ Devlet',
+        'organization': '🏛️ Kuruluş'
+    };
+    return labels[type] || type || '-';
+}
+
+function getPhoneTypeLabel(type) {
+    const labels = {
+        'mobile': '📱 Mobil',
+        'landline': '☎️ Sabit Hat',
+        'special': '🔧 Özel Servis'
+    };
+    return labels[type] || type || '-';
+}
+
+// =============================================================================
 // EVENT LISTENERS
 // =============================================================================
 
@@ -819,6 +1069,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('modalDeleteBtn')?.addEventListener('click', confirmDeleteContact);
+
+    // Phase 3: Enrich button
+    document.getElementById('modalEnrichBtn')?.addEventListener('click', () => {
+        if (state.selectedContact) enrichContact(state.selectedContact.id);
+    });
 
     document.getElementById('closeDeleteModal')?.addEventListener('click', () => {
         document.getElementById('deleteModal').classList.remove('active');
@@ -1042,4 +1297,8 @@ window.showContactDetail = showContactDetail;
 window.goToPage = goToPage;
 window.copyToClipboard = copyToClipboard;
 window.generateEmptyState = generateEmptyState;
+window.enrichContact = enrichContact;
+window.enrichAllContacts = enrichAllContacts;
+window.closeEnrichmentModal = closeEnrichmentModal;
+window.loadContacts = loadContacts;
 
