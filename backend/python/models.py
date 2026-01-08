@@ -144,3 +144,74 @@ class AuditLog(db.Model):
             'ip_address': self.ip_address,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+
+class Iliski(db.Model):
+    """İlişki modeli - Kişiler arası bağlantılar (Phase 5)"""
+    __tablename__ = 'iliski'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    kullanici_id = db.Column(db.Integer, db.ForeignKey('kullanici.id'), nullable=False, index=True)
+    
+    # Bağlantı tarafları
+    kisi_1_id = db.Column(db.Integer, db.ForeignKey('kisi.id'), nullable=False, index=True)
+    kisi_2_id = db.Column(db.Integer, db.ForeignKey('kisi.id'), nullable=False, index=True)
+    
+    # İlişki bilgileri
+    iliski_tipi = db.Column(db.String(50), nullable=False)  # aile, is, arkadas, tanidik, diger
+    guc = db.Column(db.Integer, default=1)  # 1-10 arası ilişki gücü
+    yonlu = db.Column(db.Boolean, default=False)  # Çift yönlü mü?
+    
+    # Otomatik tespit bilgileri
+    otomatik = db.Column(db.Boolean, default=False)  # Otomatik mi tespit edildi?
+    tespit_nedeni = db.Column(db.String(100), nullable=True)  # same_domain, same_city, same_company
+    
+    # Meta
+    notlar = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # İlişkiler
+    kisi_1 = db.relationship('Kisi', foreign_keys=[kisi_1_id], backref='iliskiler_kaynak')
+    kisi_2 = db.relationship('Kisi', foreign_keys=[kisi_2_id], backref='iliskiler_hedef')
+    
+    # İlişki tipi sabitleri
+    ILISKI_TIPLERI = {
+        'aile': {'label': 'Aile', 'color': '#E91E63', 'icon': '👨‍👩‍👧‍👦'},
+        'is': {'label': 'İş', 'color': '#2196F3', 'icon': '💼'},
+        'arkadas': {'label': 'Arkadaş', 'color': '#4CAF50', 'icon': '🤝'},
+        'tanidik': {'label': 'Tanıdık', 'color': '#FF9800', 'icon': '👋'},
+        'diger': {'label': 'Diğer', 'color': '#9E9E9E', 'icon': '🔗'}
+    }
+    
+    def to_dict(self):
+        tip_info = self.ILISKI_TIPLERI.get(self.iliski_tipi, self.ILISKI_TIPLERI['diger'])
+        return {
+            'id': self.id,
+            'kullanici_id': self.kullanici_id,
+            'kisi_1_id': self.kisi_1_id,
+            'kisi_2_id': self.kisi_2_id,
+            'kisi_1': self.kisi_1.to_dict_basic() if self.kisi_1 else None,
+            'kisi_2': self.kisi_2.to_dict_basic() if self.kisi_2 else None,
+            'iliski_tipi': self.iliski_tipi,
+            'iliski_label': tip_info['label'],
+            'iliski_color': tip_info['color'],
+            'iliski_icon': tip_info['icon'],
+            'guc': self.guc,
+            'yonlu': self.yonlu,
+            'otomatik': self.otomatik,
+            'tespit_nedeni': self.tespit_nedeni,
+            'notlar': self.notlar,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+    
+    def to_edge(self):
+        """D3.js için edge formatı"""
+        return {
+            'source': self.kisi_1_id,
+            'target': self.kisi_2_id,
+            'type': self.iliski_tipi,
+            'strength': self.guc,
+            'color': self.ILISKI_TIPLERI.get(self.iliski_tipi, {}).get('color', '#9E9E9E'),
+            'label': self.ILISKI_TIPLERI.get(self.iliski_tipi, {}).get('label', 'Diğer')
+        }

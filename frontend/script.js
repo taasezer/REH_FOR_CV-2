@@ -282,6 +282,7 @@ function switchView(viewName) {
         dashboard: 'Dashboard',
         contacts: 'Kişiler',
         map: 'Harita',
+        network: 'Ağ Grafiği',
         add: 'Kişi Ekle'
     };
     document.getElementById('pageTitle').textContent = titles[viewName] || 'Dashboard';
@@ -290,6 +291,7 @@ function switchView(viewName) {
     if (viewName === 'dashboard') loadDashboard();
     if (viewName === 'contacts') loadContacts();
     if (viewName === 'map') loadMapMarkers();
+    if (viewName === 'network') loadNetworkGraph();
     if (viewName === 'add') resetContactForm();
 }
 
@@ -1292,6 +1294,255 @@ function getPhoneTypeLabel(type) {
 }
 
 // =============================================================================
+// PHASE 5: NETWORK GRAPH
+// =============================================================================
+
+// Network state
+const networkState = {
+    simulation: null,
+    svg: null,
+    nodes: [],
+    links: [],
+    initialized: false
+};
+
+// Relationship type colors
+const RELATIONSHIP_COLORS = {
+    'aile': '#E91E63',
+    'is': '#2196F3',
+    'arkadas': '#4CAF50',
+    'tanidik': '#FF9800',
+    'diger': '#9E9E9E'
+};
+
+/**
+ * Load and render network graph
+ */
+async function loadNetworkGraph() {
+    try {
+        const response = await apiRequest('/network/graph');
+        const data = await response.json();
+
+        if (response.ok && data.graph) {
+            networkState.nodes = data.graph.nodes || [];
+            networkState.links = data.graph.links || [];
+
+            // Update stats
+            document.getElementById('nodeCount').textContent = `${networkState.nodes.length} düğüm`;
+            document.getElementById('edgeCount').textContent = `${networkState.links.length} bağlantı`;
+
+            renderNetworkGraph();
+        }
+    } catch (error) {
+        console.error('Network graph error:', error);
+        showToast('Hata', 'Ağ grafiği yüklenemedi', 'error');
+    }
+}
+
+/**
+ * Render D3.js force-directed graph
+ */
+function renderNetworkGraph() {
+    const container = document.querySelector('.network-container');
+    if (!container) return;
+
+    const width = container.clientWidth || 800;
+    const height = container.clientHeight || 600;
+
+    // Clear previous
+    d3.select('#networkGraph').selectAll('*').remove();
+
+    if (networkState.nodes.length === 0) {
+        d3.select('#networkGraph')
+            .append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#888')
+            .text('Kişi veya ilişki bulunamadı');
+        return;
+    }
+
+    const svg = d3.select('#networkGraph')
+        .attr('width', width)
+        .attr('height', height);
+
+    networkState.svg = svg;
+
+    // Create simulation
+    networkState.simulation = d3.forceSimulation(networkState.nodes)
+        .force('link', d3.forceLink(networkState.links)
+            .id(d => d.id)
+            .distance(d => 100 - (d.strength || 1) * 5))
+        .force('charge', d3.forceManyBody().strength(-200))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(40));
+
+    // Zoom behavior
+    const zoom = d3.zoom()
+        .scaleExtent([0.3, 3])
+        .on('zoom', (event) => {
+            g.attr('transform', event.transform);
+        });
+
+    svg.call(zoom);
+
+    const g = svg.append('g');
+
+    // Draw links
+    const link = g.append('g')
+        .attr('class', 'links')
+        .selectAll('line')
+        .data(networkState.links)
+        .enter()
+        .append('line')
+        .attr('stroke', d => RELATIONSHIP_COLORS[d.type] || '#9E9E9E')
+        .attr('stroke-opacity', 0.6)
+        .attr('stroke-width', d => Math.max(1, (d.strength || 1) / 2));
+
+    // Draw nodes
+    const node = g.append('g')
+        .attr('class', 'nodes')
+        .selectAll('g')
+        .data(networkState.nodes)
+        .enter()
+        .append('g')
+        .call(d3.drag()
+            .on('start', dragstarted)
+            .on('drag', dragged)
+            .on('end', dragended));
+
+    // Node circles
+    node.append('circle')
+        .attr('r', d => 15 + (d.degree || 0) * 2)
+        .attr('fill', d => d.degree > 3 ? '#8B0A1A' : '#5c1a1f')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 2)
+        .style('cursor', 'pointer')
+        .on('click', (event, d) => {
+            showContactDetail(d.id);
+        });
+
+    // Node labels
+    node.append('text')
+        .text(d => d.label?.split(' ')[0] || '')
+        .attr('dy', 4)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#fff')
+        .attr('font-size', '10px')
+        .attr('pointer-events', 'none');
+
+    // Node tooltips
+    node.append('title')
+        .text(d => `${d.label}\n${d.degree || 0} bağlantı`);
+
+    // Simulation tick
+    networkState.simulation.on('tick', () => {
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+
+    // Drag functions
+    function dragstarted(event, d) {
+        if (!event.active) networkState.simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+    }
+
+    function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+
+    function dragended(event, d) {
+        if (!event.active) networkState.simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+    }
+
+    networkState.initialized = true;
+}
+
+/**
+ * Auto-detect relationships
+ */
+async function autoDetectRelationships() {
+    showToast('Bilgi', 'İlişkiler tespit ediliyor...', 'warning');
+
+    try {
+        const response = await apiRequest('/iliskiler/auto-detect', {
+            method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast('Başarılı', data.mesaj, 'success');
+            loadNetworkGraph();
+        } else {
+            showToast('Hata', data.error || 'Tespit başarısız', 'error');
+        }
+    } catch (error) {
+        showToast('Hata', 'Sunucuya bağlanılamadı', 'error');
+    }
+}
+
+/**
+ * Show add relationship modal
+ */
+function showAddRelationshipModal() {
+    // Simple prompt for now - can be enhanced with proper modal
+    const kisi1 = prompt('Kişi 1 ID:');
+    const kisi2 = prompt('Kişi 2 ID:');
+    const tip = prompt('İlişki tipi (aile, is, arkadas, tanidik, diger):') || 'diger';
+
+    if (kisi1 && kisi2) {
+        createRelationship(parseInt(kisi1), parseInt(kisi2), tip);
+    }
+}
+
+/**
+ * Create new relationship
+ */
+async function createRelationship(kisi1Id, kisi2Id, tip) {
+    try {
+        const response = await apiRequest('/iliski', {
+            method: 'POST',
+            body: JSON.stringify({
+                kisi_1_id: kisi1Id,
+                kisi_2_id: kisi2Id,
+                iliski_tipi: tip,
+                guc: 5
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast('Başarılı', 'İlişki oluşturuldu', 'success');
+            loadNetworkGraph();
+        } else {
+            showToast('Hata', data.error || 'İlişki oluşturulamadı', 'error');
+        }
+    } catch (error) {
+        showToast('Hata', 'Sunucuya bağlanılamadı', 'error');
+    }
+}
+
+/**
+ * Initialize network event listeners
+ */
+function initNetworkEvents() {
+    document.getElementById('autoDetectBtn')?.addEventListener('click', autoDetectRelationships);
+    document.getElementById('addRelationshipBtn')?.addEventListener('click', showAddRelationshipModal);
+}
+
+// =============================================================================
 // EVENT LISTENERS
 // =============================================================================
 
@@ -1305,6 +1556,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Phase 4: Initialize map events
     initMapEvents();
+
+    // Phase 5: Initialize network events
+    initNetworkEvents();
 
     // Auth form toggles
     document.getElementById('showRegister')?.addEventListener('click', (e) => {

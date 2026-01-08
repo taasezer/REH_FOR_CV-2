@@ -134,6 +134,10 @@
                     <span class="nav-icon">◈</span>
                     <span>Harita</span>
                 </a>
+                <a href="#" class="nav-item" data-view="network">
+                    <span class="nav-icon">⬡</span>
+                    <span>Ağ Grafiği</span>
+                </a>
                 <a href="#" class="nav-item" data-view="add">
                     <span class="nav-icon">⊕</span>
                     <span>Kişi Ekle</span>
@@ -296,6 +300,53 @@
                     </div>
                 </div>
 
+                <!-- Network View (Phase 5) -->
+                <div id="networkView" class="view">
+                    <div class="network-controls">
+                        <div class="network-control-group">
+                            <button id="autoDetectBtn" class="btn btn-primary">
+                                🔍 Otomatik Tespit
+                            </button>
+                            <button id="addRelationshipBtn" class="btn btn-secondary">
+                                ➕ İlişki Ekle
+                            </button>
+                        </div>
+                        <div class="network-stats" id="networkStats">
+                            <span id="nodeCount">0 düğüm</span>
+                            <span id="edgeCount">0 bağlantı</span>
+                        </div>
+                    </div>
+                    <div class="network-container">
+                        <svg id="networkGraph"></svg>
+                    </div>
+                    <!-- Network Legend -->
+                    <div class="network-legend">
+                        <div class="legend-title">İlişki Tipleri</div>
+                        <div class="legend-items">
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: #E91E63;"></span>
+                                <span>Aile</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: #2196F3;"></span>
+                                <span>İş</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: #4CAF50;"></span>
+                                <span>Arkadaş</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: #FF9800;"></span>
+                                <span>Tanıdık</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: #9E9E9E;"></span>
+                                <span>Diğer</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Add/Edit Contact View -->
                 <div id="addView" class="view">
                     <div class="form-container">
@@ -424,6 +475,8 @@
     <!-- Leaflet Plugins for Phase 4 -->
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <!-- D3.js for Phase 5 -->
+    <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
     <script src="script.js"></script>
 </body>
 

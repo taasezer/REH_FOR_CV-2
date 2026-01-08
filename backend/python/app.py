@@ -20,7 +20,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
-from models import db, Kullanici, Kisi, AuditLog
+from models import db, Kullanici, Kisi, AuditLog, Iliski
 
 
 # =============================================================================
@@ -1188,6 +1188,293 @@ def get_density_grid():
 
 
 # =============================================================================
+# PHASE 5: RELATIONSHIP NETWORK ENDPOINTS
+# =============================================================================
+
+@app.route('/iliskiler', methods=['GET'])
+@jwt_required()
+def get_relationships():
+    """Tüm ilişkileri listele"""
+    try:
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        iliskiler = Iliski.query.filter_by(kullanici_id=kullanici.id).all()
+        
+        return jsonify({
+            "mesaj": f"{len(iliskiler)} ilişki bulundu",
+            "iliskiler": [i.to_dict() for i in iliskiler],
+            "toplam": len(iliskiler)
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/iliski', methods=['POST'])
+@jwt_required()
+@limiter.limit("30 per minute")
+def create_relationship():
+    """Yeni ilişki oluştur"""
+    try:
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        
+        kisi_1_id = data.get('kisi_1_id')
+        kisi_2_id = data.get('kisi_2_id')
+        iliski_tipi = data.get('iliski_tipi', 'diger')
+        
+        if not kisi_1_id or not kisi_2_id:
+            return jsonify({"error": "kisi_1_id ve kisi_2_id gerekli"}), 400
+        
+        if kisi_1_id == kisi_2_id:
+            return jsonify({"error": "Aynı kişi ile ilişki oluşturulamaz"}), 400
+        
+        # Kişilerin varlığını ve sahipliğini kontrol et
+        kisi_1 = Kisi.query.filter_by(id=kisi_1_id, kullanici_id=kullanici.id).first()
+        kisi_2 = Kisi.query.filter_by(id=kisi_2_id, kullanici_id=kullanici.id).first()
+        
+        if not kisi_1 or not kisi_2:
+            return jsonify({"error": "Kişi bulunamadı veya erişim yok"}), 404
+        
+        # Mevcut ilişki kontrolü
+        existing = Iliski.query.filter(
+            Iliski.kullanici_id == kullanici.id,
+            ((Iliski.kisi_1_id == kisi_1_id) & (Iliski.kisi_2_id == kisi_2_id)) |
+            ((Iliski.kisi_1_id == kisi_2_id) & (Iliski.kisi_2_id == kisi_1_id))
+        ).first()
+        
+        if existing:
+            return jsonify({"error": "Bu ilişki zaten mevcut"}), 409
+        
+        iliski = Iliski(
+            kullanici_id=kullanici.id,
+            kisi_1_id=kisi_1_id,
+            kisi_2_id=kisi_2_id,
+            iliski_tipi=iliski_tipi,
+            guc=data.get('guc', 5),
+            yonlu=data.get('yonlu', False),
+            otomatik=False,
+            notlar=data.get('notlar')
+        )
+        
+        db.session.add(iliski)
+        db.session.commit()
+        
+        log_action('create', 'iliski', iliski.id, kullanici.id, f"İlişki oluşturuldu")
+        
+        return jsonify({
+            "mesaj": "İlişki oluşturuldu",
+            "iliski": iliski.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/iliski/<int:iliski_id>', methods=['DELETE'])
+@jwt_required()
+def delete_relationship(iliski_id):
+    """İlişki sil"""
+    try:
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        iliski = Iliski.query.filter_by(id=iliski_id, kullanici_id=kullanici.id).first()
+        if not iliski:
+            return jsonify({"error": "İlişki bulunamadı"}), 404
+        
+        db.session.delete(iliski)
+        db.session.commit()
+        
+        log_action('delete', 'iliski', iliski_id, kullanici.id, f"İlişki silindi")
+        
+        return jsonify({"mesaj": "İlişki silindi"})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/iliskiler/auto-detect', methods=['POST'])
+@jwt_required()
+@limiter.limit("5 per minute")
+def auto_detect_relationships():
+    """Otomatik ilişki tespiti"""
+    try:
+        from network_analysis import RelationshipDetector
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        # Tüm kişileri al
+        kisiler = Kisi.query.filter_by(kullanici_id=kullanici.id).all()
+        contacts = [k.to_dict() for k in kisiler]
+        
+        # Mevcut ilişkileri al
+        existing = Iliski.query.filter_by(kullanici_id=kullanici.id).all()
+        existing_pairs = set()
+        for rel in existing:
+            pair = tuple(sorted([rel.kisi_1_id, rel.kisi_2_id]))
+            existing_pairs.add(pair)
+        
+        # Otomatik tespit
+        detected = RelationshipDetector.detect_all(contacts, existing_pairs)
+        
+        # Yeni ilişkileri kaydet
+        created_count = 0
+        for det in detected:
+            iliski = Iliski(
+                kullanici_id=kullanici.id,
+                kisi_1_id=det['kisi_1_id'],
+                kisi_2_id=det['kisi_2_id'],
+                iliski_tipi=det['iliski_tipi'],
+                guc=det['guc'],
+                otomatik=True,
+                tespit_nedeni=det['tespit_nedeni']
+            )
+            db.session.add(iliski)
+            created_count += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            "mesaj": f"{created_count} yeni ilişki tespit edildi",
+            "tespit_edilen": created_count,
+            "mevcut": len(existing_pairs)
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Network analysis modülü yüklenemedi"}), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/network/graph', methods=['GET'])
+@jwt_required()
+def get_network_graph():
+    """D3.js için ağ graf verisi"""
+    try:
+        from network_analysis import build_network_from_contacts
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        # Kişileri al
+        kisiler = Kisi.query.filter_by(kullanici_id=kullanici.id).all()
+        contacts = [k.to_dict() for k in kisiler]
+        
+        # İlişkileri al
+        iliskiler = Iliski.query.filter_by(kullanici_id=kullanici.id).all()
+        relationships = [
+            {
+                'kisi_1_id': i.kisi_1_id,
+                'kisi_2_id': i.kisi_2_id,
+                'iliski_tipi': i.iliski_tipi,
+                'guc': i.guc,
+                'otomatik': i.otomatik,
+                'tespit_nedeni': i.tespit_nedeni
+            }
+            for i in iliskiler
+        ]
+        
+        # Graf oluştur
+        graph = build_network_from_contacts(contacts, relationships)
+        
+        return jsonify({
+            "mesaj": "Ağ graf verisi",
+            "graph": graph.to_d3_format(),
+            "statistics": graph.get_statistics()
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Network analysis modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/network/analyze', methods=['GET'])
+@jwt_required()
+def analyze_network_endpoint():
+    """Tam ağ analizi"""
+    try:
+        from network_analysis import analyze_network, NetworkAnalyzer, build_network_from_contacts
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        # Kişileri al
+        kisiler = Kisi.query.filter_by(kullanici_id=kullanici.id).all()
+        contacts = [k.to_dict() for k in kisiler]
+        
+        # İlişkileri al
+        iliskiler = Iliski.query.filter_by(kullanici_id=kullanici.id).all()
+        relationships = [
+            {
+                'kisi_1_id': i.kisi_1_id,
+                'kisi_2_id': i.kisi_2_id,
+                'iliski_tipi': i.iliski_tipi,
+                'guc': i.guc,
+                'otomatik': i.otomatik,
+                'tespit_nedeni': i.tespit_nedeni
+            }
+            for i in iliskiler
+        ]
+        
+        # Analiz
+        result = analyze_network(contacts, relationships)
+        
+        return jsonify({
+            "mesaj": "Ağ analizi tamamlandı",
+            "analiz": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Network analysis modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/kisi/<int:kisi_id>/iliskiler', methods=['GET'])
+@jwt_required()
+def get_contact_relationships(kisi_id):
+    """Belirli bir kişinin ilişkileri"""
+    try:
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        kisi = Kisi.query.filter_by(id=kisi_id, kullanici_id=kullanici.id).first()
+        if not kisi:
+            return jsonify({"error": "Kişi bulunamadı"}), 404
+        
+        # Her iki taraftaki ilişkileri al
+        iliskiler = Iliski.query.filter(
+            Iliski.kullanici_id == kullanici.id,
+            (Iliski.kisi_1_id == kisi_id) | (Iliski.kisi_2_id == kisi_id)
+        ).all()
+        
+        return jsonify({
+            "mesaj": f"{kisi.tam_isim} için {len(iliskiler)} ilişki bulundu",
+            "kisi": kisi.to_dict_basic(),
+            "iliskiler": [i.to_dict() for i in iliskiler]
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -1197,5 +1484,6 @@ if __name__ == '__main__':
         print("Database tables created successfully!")
     
     app.run(host='0.0.0.0', debug=True, port=5000)
+
 
 
