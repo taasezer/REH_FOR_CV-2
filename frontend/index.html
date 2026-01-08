@@ -19,6 +19,9 @@
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
@@ -249,7 +252,48 @@
 
                 <!-- Map View -->
                 <div id="mapView" class="view">
+                    <!-- Map Controls -->
+                    <div class="map-controls">
+                        <div class="map-control-group">
+                            <label>Görünüm:</label>
+                            <div class="btn-group">
+                                <button id="mapModeMarkers" class="btn btn-sm active" data-mode="markers">
+                                    📍 İşaretçiler
+                                </button>
+                                <button id="mapModeHeatmap" class="btn btn-sm" data-mode="heatmap">
+                                    🔥 Isı Haritası
+                                </button>
+                                <button id="mapModeClusters" class="btn btn-sm" data-mode="clusters">
+                                    🎯 Kümeleme
+                                </button>
+                            </div>
+                        </div>
+                        <div class="map-control-group">
+                            <label>Yakınlık Araması:</label>
+                            <div class="proximity-controls">
+                                <input type="number" id="proximityRadius" value="5" min="1" max="100" class="input-sm">
+                                <span>km</span>
+                                <button id="enableProximity" class="btn btn-sm btn-secondary">
+                                    🎯 Haritaya Tıkla
+                                </button>
+                            </div>
+                        </div>
+                        <div class="map-control-group">
+                            <div id="mapStats" class="map-stats">
+                                <span id="mapContactCount">0 kişi</span>
+                                <span id="mapClusterCount"></span>
+                            </div>
+                        </div>
+                    </div>
                     <div id="fullMap" class="full-map"></div>
+                    <!-- Proximity Results Panel -->
+                    <div id="proximityPanel" class="proximity-panel" style="display: none;">
+                        <div class="panel-header">
+                            <h4>Yakındaki Kişiler</h4>
+                            <button id="closeProximity" class="btn btn-ghost btn-sm">✕</button>
+                        </div>
+                        <div id="proximityResults"></div>
+                    </div>
                 </div>
 
                 <!-- Add/Edit Contact View -->
@@ -377,6 +421,9 @@
 
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Plugins for Phase 4 -->
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script src="script.js"></script>
 </body>
 

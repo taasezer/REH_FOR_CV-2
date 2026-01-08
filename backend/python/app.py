@@ -940,6 +940,254 @@ def enrich_all_contacts():
 
 
 # =============================================================================
+# PHASE 4: LOCATION INTELLIGENCE ENDPOINTS
+# =============================================================================
+
+@app.route('/kisiler/heatmap', methods=['GET'])
+@jwt_required()
+def get_heatmap_data():
+    """Heatmap verisi"""
+    try:
+        from location_intel import LocationIntelligence
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        kisiler = Kisi.query.filter(
+            Kisi.kullanici_id == kullanici.id,
+            Kisi.enlem.isnot(None),
+            Kisi.boylam.isnot(None)
+        ).all()
+        
+        locations = [
+            {
+                "id": kisi.id,
+                "enlem": kisi.enlem,
+                "boylam": kisi.boylam,
+                "tam_isim": kisi.tam_isim
+            }
+            for kisi in kisiler
+        ]
+        
+        intel = LocationIntelligence(locations)
+        
+        return jsonify({
+            "mesaj": f"{len(locations)} konum için heatmap verisi",
+            "heatmap": intel.get_heatmap_data(),
+            "bounds": intel.get_bounds(),
+            "center": {
+                "lat": intel.get_center()[0],
+                "lng": intel.get_center()[1]
+            }
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Location intel modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/kisiler/clusters', methods=['GET'])
+@jwt_required()
+def get_clusters():
+    """Kümeleme verisi"""
+    try:
+        from location_intel import LocationIntelligence
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        radius = request.args.get('radius', 10, type=float)
+        
+        kisiler = Kisi.query.filter(
+            Kisi.kullanici_id == kullanici.id,
+            Kisi.enlem.isnot(None),
+            Kisi.boylam.isnot(None)
+        ).all()
+        
+        locations = [
+            {
+                "id": kisi.id,
+                "enlem": kisi.enlem,
+                "boylam": kisi.boylam,
+                "tam_isim": kisi.tam_isim
+            }
+            for kisi in kisiler
+        ]
+        
+        intel = LocationIntelligence(locations)
+        clusters = intel.get_clusters(radius)
+        
+        return jsonify({
+            "mesaj": f"{len(clusters)} küme bulundu",
+            "clusters": clusters,
+            "radius_km": radius,
+            "toplam_konum": len(locations)
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Location intel modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/kisiler/proximity', methods=['GET'])
+@jwt_required()
+def proximity_search():
+    """Yakınlık araması"""
+    try:
+        from location_intel import LocationIntelligence
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        lat = request.args.get('lat', type=float)
+        lng = request.args.get('lng', type=float)
+        radius = request.args.get('radius', 5, type=float)
+        
+        if lat is None or lng is None:
+            return jsonify({"error": "lat ve lng parametreleri gerekli"}), 400
+        
+        kisiler = Kisi.query.filter(
+            Kisi.kullanici_id == kullanici.id,
+            Kisi.enlem.isnot(None),
+            Kisi.boylam.isnot(None)
+        ).all()
+        
+        locations = [
+            {
+                "id": kisi.id,
+                "enlem": kisi.enlem,
+                "boylam": kisi.boylam,
+                "tam_isim": kisi.tam_isim
+            }
+            for kisi in kisiler
+        ]
+        
+        intel = LocationIntelligence(locations)
+        nearby = intel.find_nearby(lat, lng, radius)
+        
+        return jsonify({
+            "mesaj": f"{len(nearby)} kişi {radius} km içinde bulundu",
+            "center": {"lat": lat, "lng": lng},
+            "radius_km": radius,
+            "results": nearby
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Location intel modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/kisiler/location-stats', methods=['GET'])
+@jwt_required()
+def get_location_stats():
+    """Konum istatistikleri"""
+    try:
+        from location_intel import LocationIntelligence
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        kisiler = Kisi.query.filter(
+            Kisi.kullanici_id == kullanici.id,
+            Kisi.enlem.isnot(None),
+            Kisi.boylam.isnot(None)
+        ).all()
+        
+        locations = [
+            {
+                "id": kisi.id,
+                "enlem": kisi.enlem,
+                "boylam": kisi.boylam,
+                "tam_isim": kisi.tam_isim
+            }
+            for kisi in kisiler
+        ]
+        
+        intel = LocationIntelligence(locations)
+        
+        # Şehir bazlı dağılım
+        city_distribution = {}
+        for kisi in Kisi.query.filter(
+            Kisi.kullanici_id == kullanici.id,
+            Kisi.sehir.isnot(None)
+        ).all():
+            city = kisi.sehir
+            city_distribution[city] = city_distribution.get(city, 0) + 1
+        
+        # Ülke bazlı dağılım
+        country_distribution = {}
+        for kisi in Kisi.query.filter(
+            Kisi.kullanici_id == kullanici.id,
+            Kisi.ulke.isnot(None)
+        ).all():
+            country = kisi.ulke
+            country_distribution[country] = country_distribution.get(country, 0) + 1
+        
+        stats = intel.get_statistics()
+        stats["city_distribution"] = city_distribution
+        stats["country_distribution"] = country_distribution
+        
+        return jsonify({
+            "mesaj": "Konum istatistikleri",
+            "istatistikler": stats
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Location intel modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/kisiler/density', methods=['GET'])
+@jwt_required()
+def get_density_grid():
+    """Yoğunluk grid'i"""
+    try:
+        from location_intel import LocationIntelligence
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        grid_size = request.args.get('grid_size', 10, type=int)
+        
+        kisiler = Kisi.query.filter(
+            Kisi.kullanici_id == kullanici.id,
+            Kisi.enlem.isnot(None),
+            Kisi.boylam.isnot(None)
+        ).all()
+        
+        locations = [
+            {
+                "id": kisi.id,
+                "enlem": kisi.enlem,
+                "boylam": kisi.boylam
+            }
+            for kisi in kisiler
+        ]
+        
+        intel = LocationIntelligence(locations)
+        
+        return jsonify({
+            "mesaj": "Yoğunluk grid verisi",
+            "density": intel.get_density_grid(grid_size),
+            "grid_size": grid_size
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Location intel modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -949,4 +1197,5 @@ if __name__ == '__main__':
         print("Database tables created successfully!")
     
     app.run(host='0.0.0.0', debug=True, port=5000)
+
 

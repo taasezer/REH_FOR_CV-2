@@ -357,10 +357,300 @@ async function loadMapMarkers() {
                 const bounds = L.latLngBounds(data.markers.map(m => [m.enlem, m.boylam]));
                 state.maps.full.fitBounds(bounds, { padding: [50, 50] });
             }
+
+            // Update map stats
+            document.getElementById('mapContactCount').textContent = `${data.markers.length} kişi`;
         }
     } catch (error) {
         console.error('Map markers error:', error);
     }
+}
+
+// =============================================================================
+// PHASE 4: LOCATION INTELLIGENCE
+// =============================================================================
+
+// Map state
+const mapState = {
+    mode: 'markers', // markers, heatmap, clusters
+    heatLayer: null,
+    clusterGroup: null,
+    proximityMode: false,
+    proximityCircle: null,
+    markerData: []
+};
+
+/**
+ * Switch map display mode
+ */
+async function setMapMode(mode) {
+    mapState.mode = mode;
+
+    // Update button states
+    document.querySelectorAll('.map-controls .btn-group .btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+
+    // Clear existing layers
+    clearMapLayers();
+
+    if (!state.maps.full) return;
+
+    switch (mode) {
+        case 'markers':
+            await loadMapMarkers();
+            break;
+        case 'heatmap':
+            await loadHeatmap();
+            break;
+        case 'clusters':
+            await loadClusters();
+            break;
+    }
+}
+
+/**
+ * Clear all map layers
+ */
+function clearMapLayers() {
+    // Clear markers
+    state.markers.forEach(marker => {
+        if (state.maps.full) state.maps.full.removeLayer(marker);
+    });
+    state.markers = [];
+
+    // Clear heatmap
+    if (mapState.heatLayer && state.maps.full) {
+        state.maps.full.removeLayer(mapState.heatLayer);
+        mapState.heatLayer = null;
+    }
+
+    // Clear clusters
+    if (mapState.clusterGroup && state.maps.full) {
+        state.maps.full.removeLayer(mapState.clusterGroup);
+        mapState.clusterGroup = null;
+    }
+}
+
+/**
+ * Load heatmap layer
+ */
+async function loadHeatmap() {
+    try {
+        const response = await apiRequest('/kisiler/heatmap');
+        const data = await response.json();
+
+        if (response.ok && data.heatmap && state.maps.full) {
+            // Create heatmap layer
+            mapState.heatLayer = L.heatLayer(data.heatmap, {
+                radius: 25,
+                blur: 15,
+                maxZoom: 17,
+                gradient: {
+                    0.0: '#000000',
+                    0.2: '#2c0a0d',
+                    0.4: '#5c1a1f',
+                    0.6: '#8B0A1A',
+                    0.8: '#B91C2C',
+                    1.0: '#FF4444'
+                }
+            }).addTo(state.maps.full);
+
+            // Fit bounds
+            if (data.bounds) {
+                state.maps.full.fitBounds([
+                    [data.bounds.min_lat, data.bounds.min_lng],
+                    [data.bounds.max_lat, data.bounds.max_lng]
+                ], { padding: [50, 50] });
+            }
+
+            document.getElementById('mapContactCount').textContent = `${data.heatmap.length} konum`;
+            showToast('Bilgi', 'Isı haritası yüklendi', 'success');
+        }
+    } catch (error) {
+        console.error('Heatmap error:', error);
+        showToast('Hata', 'Isı haritası yüklenemedi', 'error');
+    }
+}
+
+/**
+ * Load clustered markers
+ */
+async function loadClusters() {
+    try {
+        const response = await apiRequest('/kisiler/harita');
+        const data = await response.json();
+
+        if (response.ok && data.markers && state.maps.full) {
+            // Create marker cluster group
+            mapState.clusterGroup = L.markerClusterGroup({
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: true,
+                zoomToBoundsOnClick: true,
+                iconCreateFunction: function (cluster) {
+                    const count = cluster.getChildCount();
+                    let size = 'small';
+                    if (count >= 10) size = 'medium';
+                    if (count >= 50) size = 'large';
+
+                    return L.divIcon({
+                        html: `<div class="cluster-icon cluster-${size}">${count}</div>`,
+                        className: 'custom-cluster',
+                        iconSize: L.point(40, 40)
+                    });
+                }
+            });
+
+            // Add markers to cluster group
+            data.markers.forEach(contact => {
+                const marker = L.marker([contact.enlem, contact.boylam])
+                    .bindPopup(`
+                        <strong>${contact.tam_isim}</strong><br>
+                        ${contact.adres || ''}<br>
+                        <button onclick="showContactDetail(${contact.id})" class="popup-btn">Detay</button>
+                    `);
+                mapState.clusterGroup.addLayer(marker);
+            });
+
+            state.maps.full.addLayer(mapState.clusterGroup);
+
+            // Fit bounds
+            if (data.markers.length > 0) {
+                const bounds = L.latLngBounds(data.markers.map(m => [m.enlem, m.boylam]));
+                state.maps.full.fitBounds(bounds, { padding: [50, 50] });
+            }
+
+            // Get cluster count from API
+            const clusterResponse = await apiRequest('/kisiler/clusters?radius=10');
+            const clusterData = await clusterResponse.json();
+
+            document.getElementById('mapContactCount').textContent = `${data.markers.length} kişi`;
+            document.getElementById('mapClusterCount').textContent = `(${clusterData.clusters?.length || 0} küme)`;
+
+            showToast('Bilgi', 'Kümeleme yüklendi', 'success');
+        }
+    } catch (error) {
+        console.error('Clusters error:', error);
+        showToast('Hata', 'Kümeleme yüklenemedi', 'error');
+    }
+}
+
+/**
+ * Enable proximity search mode
+ */
+function enableProximitySearch() {
+    mapState.proximityMode = !mapState.proximityMode;
+
+    const btn = document.getElementById('enableProximity');
+    btn.classList.toggle('active', mapState.proximityMode);
+    btn.textContent = mapState.proximityMode ? '❌ İptal' : '🎯 Haritaya Tıkla';
+
+    if (mapState.proximityMode) {
+        showToast('Bilgi', 'Haritada bir noktaya tıklayın', 'warning');
+        state.maps.full?.getContainer().style.cursor = 'crosshair';
+    } else {
+        state.maps.full?.getContainer().style.cursor = '';
+        clearProximityCircle();
+    }
+}
+
+/**
+ * Handle map click for proximity search
+ */
+async function handleProximityClick(e) {
+    if (!mapState.proximityMode) return;
+
+    const { lat, lng } = e.latlng;
+    const radius = parseFloat(document.getElementById('proximityRadius').value) || 5;
+
+    // Clear previous circle
+    clearProximityCircle();
+
+    // Draw circle
+    mapState.proximityCircle = L.circle([lat, lng], {
+        radius: radius * 1000, // km to meters
+        color: '#8B0A1A',
+        fillColor: '#8B0A1A',
+        fillOpacity: 0.2,
+        weight: 2
+    }).addTo(state.maps.full);
+
+    // Search nearby contacts
+    try {
+        const response = await apiRequest(`/kisiler/proximity?lat=${lat}&lng=${lng}&radius=${radius}`);
+        const data = await response.json();
+
+        if (response.ok) {
+            showProximityResults(data.results, lat, lng, radius);
+        }
+    } catch (error) {
+        console.error('Proximity search error:', error);
+        showToast('Hata', 'Yakınlık araması başarısız', 'error');
+    }
+
+    // Disable proximity mode
+    mapState.proximityMode = false;
+    document.getElementById('enableProximity').classList.remove('active');
+    document.getElementById('enableProximity').textContent = '🎯 Haritaya Tıkla';
+    state.maps.full?.getContainer().style.cursor = '';
+}
+
+/**
+ * Show proximity search results
+ */
+function showProximityResults(results, lat, lng, radius) {
+    const panel = document.getElementById('proximityPanel');
+    const container = document.getElementById('proximityResults');
+
+    if (results.length === 0) {
+        container.innerHTML = '<p class="empty-state">Bu alanda kişi bulunamadı</p>';
+    } else {
+        container.innerHTML = `
+            <p class="results-summary">${results.length} kişi ${radius} km içinde</p>
+            <div class="proximity-list">
+                ${results.map(r => `
+                    <div class="proximity-item" onclick="showContactDetail(${r.contact_id})">
+                        <span class="proximity-name">${r.label}</span>
+                        <span class="proximity-distance">${r.distance_km} km</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    panel.style.display = 'block';
+}
+
+/**
+ * Clear proximity circle
+ */
+function clearProximityCircle() {
+    if (mapState.proximityCircle && state.maps.full) {
+        state.maps.full.removeLayer(mapState.proximityCircle);
+        mapState.proximityCircle = null;
+    }
+    document.getElementById('proximityPanel').style.display = 'none';
+}
+
+/**
+ * Initialize map event listeners
+ */
+function initMapEvents() {
+    // Map mode buttons
+    document.getElementById('mapModeMarkers')?.addEventListener('click', () => setMapMode('markers'));
+    document.getElementById('mapModeHeatmap')?.addEventListener('click', () => setMapMode('heatmap'));
+    document.getElementById('mapModeClusters')?.addEventListener('click', () => setMapMode('clusters'));
+
+    // Proximity search
+    document.getElementById('enableProximity')?.addEventListener('click', enableProximitySearch);
+    document.getElementById('closeProximity')?.addEventListener('click', clearProximityCircle);
+
+    // Map click handler
+    setTimeout(() => {
+        if (state.maps.full) {
+            state.maps.full.on('click', handleProximityClick);
+        }
+    }, 1000);
 }
 
 // =============================================================================
@@ -1012,6 +1302,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         showAuthScreen();
     }
+
+    // Phase 4: Initialize map events
+    initMapEvents();
 
     // Auth form toggles
     document.getElementById('showRegister')?.addEventListener('click', (e) => {

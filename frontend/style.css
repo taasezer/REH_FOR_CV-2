@@ -1897,6 +1897,248 @@ textarea {
     animation: pulse 2s infinite;
 }
 
+/* ===== PHASE 4: LOCATION INTELLIGENCE STYLES ===== */
+#mapView {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.map-controls {
+    background: var(--color-bg-card);
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-sm) var(--space-md);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    align-items: center;
+    z-index: 500;
+}
+
+.map-control-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.map-control-group label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-group {
+    display: flex;
+    gap: 0;
+}
+
+.btn-group .btn {
+    border-radius: 0;
+    border-right: none;
+}
+
+.btn-group .btn:first-child {
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.btn-group .btn:last-child {
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    border-right: 1px solid var(--color-border);
+}
+
+.btn-group .btn.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.proximity-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.input-sm {
+    width: 60px;
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.85rem;
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+}
+
+.map-stats {
+    display: flex;
+    gap: var(--space-md);
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+.map-stats span {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.full-map {
+    flex: 1;
+    min-height: 400px;
+}
+
+/* Proximity Panel */
+.proximity-panel {
+    position: absolute;
+    top: 60px;
+    right: var(--space-md);
+    width: 280px;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 600;
+    max-height: 400px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.proximity-panel .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-dark);
+}
+
+.proximity-panel .panel-header h4 {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-primary-light);
+}
+
+.proximity-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-sm);
+}
+
+.proximity-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.proximity-item:hover {
+    background: var(--color-bg-hover);
+}
+
+.proximity-name {
+    font-size: 0.85rem;
+    color: var(--color-text-primary);
+}
+
+.proximity-distance {
+    font-size: 0.75rem;
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.results-summary {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: var(--space-xs);
+}
+
+/* Custom Cluster Icons */
+.custom-cluster {
+    background: transparent !important;
+}
+
+.cluster-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    box-shadow: 0 2px 10px rgba(139, 10, 26, 0.5);
+}
+
+.cluster-small {
+    width: 30px;
+    height: 30px;
+    font-size: 0.8rem;
+    background: linear-gradient(135deg, var(--color-primary), #5c1a1f);
+}
+
+.cluster-medium {
+    width: 40px;
+    height: 40px;
+    font-size: 0.9rem;
+    background: linear-gradient(135deg, #B91C2C, var(--color-primary));
+}
+
+.cluster-large {
+    width: 50px;
+    height: 50px;
+    font-size: 1rem;
+    background: linear-gradient(135deg, #FF4444, #B91C2C);
+}
+
+/* Popup Button */
+.popup-btn {
+    display: inline-block;
+    margin-top: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.popup-btn:hover {
+    background: var(--color-primary-light);
+}
+
+/* Override Leaflet marker cluster default styles */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+    background-color: rgba(139, 10, 26, 0.6) !important;
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+    background-color: rgba(139, 10, 26, 0.9) !important;
+    color: white !important;
+}
+
+/* Responsive map controls */
+@media (max-width: 768px) {
+    .map-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .proximity-panel {
+        left: var(--space-md);
+        right: var(--space-md);
+        width: auto;
+    }
+}
+
 /* ===== REDUCED MOTION ===== */
 @media (prefers-reduced-motion: reduce) {
 
