@@ -2124,6 +2124,283 @@ function initExportImportEvents() {
 }
 
 // =============================================================================
+// PHASE 8: SECURITY & OPSEC
+// =============================================================================
+
+/**
+ * Load audit logs
+ */
+async function loadAuditLogs(page = 1) {
+    const list = document.getElementById('auditLogList');
+    if (!list) return;
+
+    list.innerHTML = '<tr><td colspan="4" class="text-center">Yükleniyor...</td></tr>';
+
+    try {
+        const action = document.getElementById('auditActionFilter').value;
+        let url = `/api/security/audit-logs?page=${page}`;
+        if (action) url += `&action=${action}`;
+
+        const response = await apiRequest(url);
+        const data = await response.json();
+
+        if (response.ok) {
+            if (data.logs && data.logs.length > 0) {
+                list.innerHTML = data.logs.map(log => `
+                    <tr>
+                        <td>${log.formatted_time}</td>
+                        <td>${renderActionIcon(log.action)} ${log.action}</td>
+                        <td title="${escapeHtml(log.details)}">${escapeHtml(log.details)}</td>
+                        <td><span class="badge badge-secondary">${log.ip_address || '-'}</span></td>
+                    </tr>
+                `).join('');
+
+                renderPagination(data.sayfa, data.toplam_sayfa, 'auditPagination', loadAuditLogs);
+            } else {
+                list.innerHTML = '<tr><td colspan="4" class="text-center">Kayıt bulunamadı</td></tr>';
+            }
+        } else {
+            list.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Hata: ${data.error}</td></tr>`;
+        }
+    } catch (error) {
+        list.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Bağlantı hatası</td></tr>';
+    }
+}
+
+function renderActionIcon(action) {
+    const icons = {
+        'create': '➕', 'read': '👁️', 'update': '✏️', 'delete': '🗑️',
+        'login': '🔐', 'logout': '🚪', 'export': '📤', 'import': '📥'
+    };
+    return icons[action] || '●';
+}
+
+/**
+ * Load security configuration
+ */
+async function loadSecurityConfig() {
+    try {
+        const response = await apiRequest('/api/security/config');
+        const data = await response.json();
+
+        if (response.ok) {
+            const form = document.getElementById('securityConfigForm');
+            if (form) {
+                form.innerHTML = Object.entries(data.config).map(([key, value]) => `
+                    <div class="form-group">
+                        <label>${formatConfigKey(key)}</label>
+                        ${renderConfigInput(key, value)}
+                    </div>
+                `).join('');
+            }
+        }
+    } catch (error) {
+        showToast('Hata', 'Ayarlar yüklenemedi', 'error');
+    }
+}
+
+function formatConfigKey(key) {
+    return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function renderConfigInput(key, value) {
+    if (typeof value === 'boolean') {
+        return `
+            <select class="select-input" name="${key}">
+                <option value="true" ${value ? 'selected' : ''}>Aktif</option>
+                <option value="false" ${!value ? 'selected' : ''}>Pasif</option>
+            </select>
+        `;
+    } else if (typeof value === 'number') {
+        return `<input type="number" class="input-lg" name="${key}" value="${value}">`;
+    } else {
+        return `<input type="text" class="input-lg" name="${key}" value="${value}">`;
+    }
+}
+
+/**
+ * Save security configuration
+ */
+async function saveSecurityConfig() {
+    const form = document.getElementById('securityConfigForm');
+    const inputs = form.querySelectorAll('input, select');
+    const config = {};
+
+    inputs.forEach(input => {
+        let value = input.value;
+        if (input.type === 'number') value = parseInt(value);
+        if (input.tagName === 'SELECT' && (value === 'true' || value === 'false')) {
+            value = value === 'true';
+        }
+        config[input.name] = value;
+    });
+
+    try {
+        const response = await apiRequest('/api/security/config', 'PUT', config);
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast('Başarılı', data.mesaj, 'success');
+        } else {
+            showToast('Hata', data.error, 'error');
+        }
+    } catch (error) {
+        showToast('Hata', 'Kaydedilemedi', 'error');
+    }
+}
+
+/**
+ * Check password strength
+ */
+async function checkPasswordStrength() {
+    const password = document.getElementById('strengthInput').value;
+    if (!password) return;
+
+    try {
+        const response = await apiRequest('/api/security/password-strength', 'POST', { password });
+        const data = await response.json();
+        const resultDiv = document.getElementById('strengthResult');
+
+        if (response.ok) {
+            const result = data.result;
+            let color = 'red';
+            if (result.strength === 'medium') color = 'orange';
+            if (result.strength === 'strong') color = 'green';
+
+            resultDiv.innerHTML = `
+                <div class="result-box result-${color}">
+                    <h4>Güç: ${result.strength.toUpperCase()} (${result.score}/5)</h4>
+                    ${result.issues.length ? '<ul>' + result.issues.map(i => `<li>${i}</li>`).join('') + '</ul>' : '<p>✅ Güçlü şifre</p>'}
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+/**
+ * Mask data
+ */
+async function maskData() {
+    const type = document.getElementById('maskType').value;
+    const value = document.getElementById('maskInput').value;
+
+    try {
+        const response = await apiRequest('/api/security/mask', 'POST', { type, value });
+        const data = await response.json();
+
+        if (response.ok) {
+            document.getElementById('maskResult').innerHTML = `
+                <div class="result-box result-info">
+                    <strong>Maskelenmiş:</strong> ${data.masked}
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+/**
+ * Encrypt/Decrypt
+ */
+async function handleCrypto(action) {
+    const endpoint = action === 'encrypt' ? '/api/security/encrypt' : '/api/security/decrypt';
+    const input = document.getElementById('cryptoInput').value;
+
+    try {
+        const response = await apiRequest(endpoint, 'POST', { data: input });
+        const data = await response.json();
+
+        if (response.ok) {
+            document.getElementById('cryptoOutput').value = action === 'encrypt' ? data.encrypted : data.decrypted;
+        } else {
+            showToast('Hata', data.error, 'error');
+        }
+    } catch (error) {
+        showToast('Hata', 'İşlem başarısız', 'error');
+    }
+}
+
+/**
+ * Initialize security events
+ */
+function initSecurityEvents() {
+    // Tabs
+    document.querySelectorAll('[data-sec-tab]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('[data-sec-tab]').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.security-tab-content').forEach(c => c.classList.remove('active'));
+
+            e.target.classList.add('active');
+            const tabId = e.target.dataset.secTab + 'Tab';
+            document.getElementById(tabId).classList.add('active');
+
+            if (tabId === 'auditTab') loadAuditLogs();
+            if (tabId === 'configTab') loadSecurityConfig();
+        });
+    });
+
+    // Audit Logs
+    document.getElementById('refreshAuditBtn')?.addEventListener('click', () => loadAuditLogs());
+    document.getElementById('auditActionFilter')?.addEventListener('change', () => loadAuditLogs());
+
+    // Config
+    document.getElementById('saveConfigBtn')?.addEventListener('click', saveSecurityConfig);
+
+    // Tor
+    document.getElementById('torToggle')?.addEventListener('change', async (e) => {
+        const enable = e.target.checked;
+        const port = document.getElementById('torPort').value;
+
+        try {
+            const response = await apiRequest('/api/security/proxy/tor', 'POST', { enable, port });
+            const data = await response.json();
+
+            if (response.ok) {
+                document.getElementById('torStatusText').textContent = enable ? 'Tor aktif (Bağlanılıyor...)' : 'Tor devre dışı';
+                showToast('Bilgi', data.mesaj, 'info');
+            }
+        } catch (error) {
+            e.target.checked = !enable; // Revert
+            showToast('Hata', 'Tor ayarı değiştirilemedi', 'error');
+        }
+    });
+
+    // Proxy Test
+    document.getElementById('testProxyBtn')?.addEventListener('click', async () => {
+        const resultDiv = document.getElementById('proxyTestResult');
+        resultDiv.innerHTML = '<p>Test ediliyor...</p>';
+
+        try {
+            const response = await apiRequest('/api/security/proxy/test', 'POST');
+            const data = await response.json();
+
+            if (response.ok && data.result.success) {
+                resultDiv.innerHTML = `
+                    <div class="result-box result-success">
+                        <p>✅ Bağlantı Başarılı</p>
+                        <p>IP: ${data.result.ip}</p>
+                        <p>Tor: ${data.result.tor_active ? 'Aktif' : 'Pasif'}</p>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `<div class="result-box result-danger">❌ Hata: ${data.result?.error || 'Bilinmeyen hata'}</div>`;
+            }
+        } catch (error) {
+            resultDiv.innerHTML = '<div class="result-box result-danger">❌ Bağlantı hatası</div>';
+        }
+    });
+
+    // Tools
+    document.getElementById('checkStrengthBtn')?.addEventListener('click', checkPasswordStrength);
+    document.getElementById('maskBtn')?.addEventListener('click', maskData);
+    document.getElementById('encryptBtn')?.addEventListener('click', () => handleCrypto('encrypt'));
+    document.getElementById('decryptBtn')?.addEventListener('click', () => handleCrypto('decrypt'));
+}
+
+// =============================================================================
 // EVENT LISTENERS
 // =============================================================================
 
@@ -2146,6 +2423,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Phase 7: Initialize export/import events
     initExportImportEvents();
+
+    // Phase 8: Initialize security events
+    initSecurityEvents();
 
     // Auth form toggles
     document.getElementById('showRegister')?.addEventListener('click', (e) => {

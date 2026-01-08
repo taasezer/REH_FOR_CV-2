@@ -142,6 +142,10 @@
                     <span class="nav-icon">🔍</span>
                     <span>OSINT Araçları</span>
                 </a>
+                <a href="#" class="nav-item" data-view="security">
+                    <span class="nav-icon">🛡️</span>
+                    <span>Güvenlik</span>
+                </a>
                 <a href="#" class="nav-item" data-view="add">
                     <span class="nav-icon">⊕</span>
                     <span>Kişi Ekle</span>
@@ -476,6 +480,136 @@
                                         Et</button>
                                 </div>
                                 <div class="osint-result" id="vtUrlResult"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security View (Phase 8) -->
+                <div id="securityView" class="view">
+                    <div class="security-container">
+                        <!-- Tabs -->
+                        <div class="osint-tabs">
+                            <button class="osint-tab active" data-sec-tab="audit">📝 Audit Logları</button>
+                            <button class="osint-tab" data-sec-tab="config">⚙️ Yapılandırma</button>
+                            <button class="osint-tab" data-sec-tab="proxy">🌐 Proxy & Tor</button>
+                            <button class="osint-tab" data-sec-tab="tools">🛠️ Araçlar</button>
+                        </div>
+
+                        <!-- Audit Logs -->
+                        <div class="security-tab-content active" id="auditTab">
+                            <div class="audit-controls">
+                                <select id="auditActionFilter" class="select-input">
+                                    <option value="">Tüm Aksiyonlar</option>
+                                    <option value="login">🔐 Giriş</option>
+                                    <option value="create">➕ Oluşturma</option>
+                                    <option value="update">✏️ Güncelleme</option>
+                                    <option value="delete">🗑️ Silme</option>
+                                    <option value="export">📤 Export</option>
+                                </select>
+                                <button id="refreshAuditBtn" class="btn btn-secondary btn-sm">🔄 Yenile</button>
+                            </div>
+                            <div class="audit-table-container">
+                                <table class="audit-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Zaman</th>
+                                            <th>Aksiyon</th>
+                                            <th>Detay</th>
+                                            <th>IP</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="auditLogList">
+                                        <tr>
+                                            <td colspan="4" class="text-center">Yükleniyor...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="auditPagination" class="pagination"></div>
+                        </div>
+
+                        <!-- Config -->
+                        <div class="security-tab-content" id="configTab">
+                            <div class="osint-form">
+                                <h3>Güvenlik Ayarları</h3>
+                                <div class="config-grid" id="securityConfigForm">
+                                    <!-- Populated by JS -->
+                                </div>
+                                <div class="form-actions">
+                                    <button id="saveConfigBtn" class="btn btn-primary">Kaydet</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Proxy/Tor -->
+                        <div class="security-tab-content" id="proxyTab">
+                            <div class="osint-form">
+                                <div class="tor-status-card">
+                                    <div class="status-header">
+                                        <h3>🧅 Tor Ağı</h3>
+                                        <label class="switch">
+                                            <input type="checkbox" id="torToggle">
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+                                    <p class="status-text" id="torStatusText">Tor devre dışı</p>
+                                    <div class="tor-port-config">
+                                        <label>Tor Port:</label>
+                                        <input type="number" id="torPort" value="9050" class="input-sm"
+                                            style="width: 80px;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="osint-form">
+                                <h3>Proxy Testi</h3>
+                                <button id="testProxyBtn" class="btn btn-secondary">Bağlantıyı Test Et</button>
+                                <div id="proxyTestResult" class="osint-result"></div>
+                            </div>
+                        </div>
+
+                        <!-- Tools -->
+                        <div class="security-tab-content" id="toolsTab">
+                            <div class="osint-form">
+                                <h3>Şifre Güç Analizi</h3>
+                                <div class="form-row">
+                                    <input type="password" id="strengthInput" placeholder="Şifre" class="input-lg">
+                                    <button id="checkStrengthBtn" class="btn btn-primary">Analiz Et</button>
+                                </div>
+                                <div id="strengthResult" class="osint-result"></div>
+                            </div>
+
+                            <hr>
+
+                            <div class="osint-form">
+                                <h3>Şifreleme / Çözme</h3>
+                                <div class="crypto-box">
+                                    <textarea id="cryptoInput" placeholder="Metin girin..."
+                                        class="input-area"></textarea>
+                                    <div class="crypto-actions">
+                                        <button id="encryptBtn" class="btn btn-sm btn-secondary">🔒 Şifrele</button>
+                                        <button id="decryptBtn" class="btn btn-sm btn-secondary">🔓 Çöz</button>
+                                    </div>
+                                    <textarea id="cryptoOutput" readonly placeholder="Sonuç..."
+                                        class="input-area"></textarea>
+                                </div>
+                            </div>
+
+                            <hr>
+
+                            <div class="osint-form">
+                                <h3>Veri Maskeleme</h3>
+                                <div class="form-row">
+                                    <select id="maskType" class="select-input">
+                                        <option value="email">E-posta</option>
+                                        <option value="phone">Telefon</option>
+                                        <option value="api_key">API Key</option>
+                                        <option value="ip">IP Adresi</option>
+                                    </select>
+                                    <input type="text" id="maskInput" placeholder="Veri" class="input-lg">
+                                    <button id="maskBtn" class="btn btn-secondary">Maskele</button>
+                                </div>
+                                <div id="maskResult" class="mask-result"></div>
                             </div>
                         </div>
                     </div>

@@ -2667,3 +2667,198 @@ textarea {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* ===== PHASE 8: SECURITY & OPSEC STYLES ===== */
+
+/* Security Container */
+.security-container {
+    padding: var(--space-md);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.security-tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.security-tab-content.active {
+    display: block;
+}
+
+/* Audit Logs */
+.audit-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-md);
+    background: var(--color-bg-card);
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+}
+
+.audit-table-container {
+    overflow-x: auto;
+    background: var(--color-bg-card);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+}
+
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.audit-table th,
+.audit-table td {
+    padding: var(--space-sm) var(--space-md);
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.audit-table th {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-muted);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.audit-table tr:last-child td {
+    border-bottom: none;
+}
+
+.audit-table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Config Grid */
+.config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--color-border);
+}
+
+/* Tor Status */
+.tor-status-card {
+    background: linear-gradient(135deg, rgba(30, 30, 30, 0.8), rgba(20, 20, 20, 0.9));
+    border: 1px solid var(--color-primary-dark);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    text-align: center;
+    margin-bottom: var(--space-lg);
+}
+
+.status-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-md);
+}
+
+.status-text {
+    font-size: 1.2rem;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-md);
+}
+
+.tor-port-config {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    color: var(--color-text-muted);
+}
+
+/* Toggle Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--color-bg-input);
+    transition: .4s;
+    border: 1px solid var(--color-border);
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--color-text-muted);
+    transition: .4s;
+}
+
+input:checked+.slider {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+input:checked+.slider:before {
+    transform: translateX(26px);
+    background-color: #fff;
+}
+
+.slider.round {
+    border-radius: 24px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+/* Crypto Tools */
+.crypto-box {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.crypto-actions {
+    display: flex;
+    gap: var(--space-sm);
+    justify-content: center;
+}
+
+.input-area {
+    width: 100%;
+    min-height: 100px;
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    font-family: monospace;
+    padding: var(--space-sm);
+    resize: vertical;
+}
+
+.mask-result {
+    margin-top: var(--space-md);
+}

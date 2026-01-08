@@ -2217,6 +2217,295 @@ def import_auto():
 
 
 # =============================================================================
+# PHASE 8: SECURITY & OPSEC ENDPOINTS
+# =============================================================================
+
+@app.route('/api/security/audit-logs', methods=['GET'])
+@jwt_required()
+def get_audit_logs():
+    """Audit logları listele"""
+    try:
+        from security import AuditLogViewer
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        # Sayfalama
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        per_page = min(per_page, 100)
+        
+        # Filtreler
+        action = request.args.get('action')
+        entity_type = request.args.get('entity_type')
+        
+        query = AuditLog.query.filter_by(kullanici_id=kullanici.id)
+        
+        if action:
+            query = query.filter_by(action=action)
+        if entity_type:
+            query = query.filter_by(entity_type=entity_type)
+        
+        query = query.order_by(AuditLog.created_at.desc())
+        
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        logs = [AuditLogViewer.format_log_entry(log.to_dict()) for log in paginated.items]
+        stats = AuditLogViewer.get_statistics([log.to_dict() for log in paginated.items])
+        
+        return jsonify({
+            "mesaj": f"{len(logs)} log kaydı",
+            "logs": logs,
+            "statistics": stats,
+            "sayfa": page,
+            "toplam_sayfa": paginated.pages,
+            "toplam": paginated.total
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Security modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/security/config', methods=['GET'])
+@jwt_required()
+def get_security_config():
+    """Güvenlik yapılandırmasını al"""
+    try:
+        from security import security_config
+        
+        return jsonify({
+            "mesaj": "Güvenlik yapılandırması",
+            "config": security_config.get_all()
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Security modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/security/config', methods=['PUT'])
+@jwt_required()
+def update_security_config():
+    """Güvenlik yapılandırmasını güncelle"""
+    try:
+        from security import security_config
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        updated = []
+        
+        for key, value in data.items():
+            if security_config.set(key, value):
+                updated.append(key)
+        
+        log_action('update', 'security_config', None, kullanici.id, f"Güncellenen: {', '.join(updated)}")
+        
+        return jsonify({
+            "mesaj": f"{len(updated)} ayar güncellendi",
+            "updated": updated,
+            "config": security_config.get_all()
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Security modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/security/password-strength', methods=['POST'])
+@jwt_required()
+def check_password_strength():
+    """Şifre gücünü kontrol et"""
+    try:
+        from security import security_config
+        
+        data = request.get_json()
+        password = data.get('password', '')
+        
+        if not password:
+            return jsonify({"error": "Şifre gerekli"}), 400
+        
+        result = security_config.validate_password_strength(password)
+        
+        return jsonify({
+            "mesaj": "Şifre analizi",
+            "result": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Security modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/security/proxy/status', methods=['GET'])
+@jwt_required()
+def get_proxy_status():
+    """Proxy durumunu al"""
+    try:
+        from security import proxy_manager
+        
+        return jsonify({
+            "mesaj": "Proxy durumu",
+            "proxies": proxy_manager.proxies,
+            "tor_enabled": proxy_manager.tor_enabled,
+            "tor_port": proxy_manager.tor_port
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Security modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/security/proxy/test', methods=['POST'])
+@jwt_required()
+@limiter.limit("5 per minute")
+def test_proxy_connection():
+    """Proxy bağlantısını test et"""
+    try:
+        from security import proxy_manager
+        
+        result = proxy_manager.test_connection()
+        
+        return jsonify({
+            "mesaj": "Bağlantı testi",
+            "result": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Security modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/security/proxy/tor', methods=['POST'])
+@jwt_required()
+def toggle_tor():
+    """Tor'u aç/kapat"""
+    try:
+        from security import proxy_manager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        enable = data.get('enable', True)
+        port = data.get('port', 9050)
+        
+        if enable:
+            result = proxy_manager.enable_tor(port)
+            log_action('update', 'tor', None, kullanici.id, "Tor etkinleştirildi")
+        else:
+            result = proxy_manager.disable_tor()
+            log_action('update', 'tor', None, kullanici.id, "Tor devre dışı")
+        
+        return jsonify({
+            "mesaj": "Tor ayarı güncellendi",
+            "result": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Security modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/security/mask', methods=['POST'])
+@jwt_required()
+def mask_data():
+    """Veriyi maskele"""
+    try:
+        from security import data_masker
+        
+        data = request.get_json()
+        data_type = data.get('type')
+        value = data.get('value', '')
+        
+        if data_type == 'email':
+            masked = data_masker.mask_email(value)
+        elif data_type == 'phone':
+            masked = data_masker.mask_phone(value)
+        elif data_type == 'api_key':
+            masked = data_masker.mask_api_key(value)
+        elif data_type == 'ip':
+            masked = data_masker.mask_ip(value)
+        else:
+            return jsonify({"error": "Geçersiz tip. Desteklenen: email, phone, api_key, ip"}), 400
+        
+        return jsonify({
+            "mesaj": "Veri maskelendi",
+            "original_type": data_type,
+            "masked": masked
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Security modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/security/encrypt', methods=['POST'])
+@jwt_required()
+def encrypt_data():
+    """Veriyi şifrele"""
+    try:
+        from security import encryption_manager
+        
+        data = request.get_json()
+        plaintext = data.get('data', '')
+        
+        if not plaintext:
+            return jsonify({"error": "Veri gerekli"}), 400
+        
+        encrypted = encryption_manager.encrypt(plaintext)
+        
+        return jsonify({
+            "mesaj": "Veri şifrelendi",
+            "encrypted": encrypted
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Security modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/security/decrypt', methods=['POST'])
+@jwt_required()
+def decrypt_data():
+    """Şifreli veriyi çöz"""
+    try:
+        from security import encryption_manager
+        
+        data = request.get_json()
+        encrypted = data.get('data', '')
+        
+        if not encrypted:
+            return jsonify({"error": "Şifreli veri gerekli"}), 400
+        
+        decrypted = encryption_manager.decrypt(encrypted)
+        
+        return jsonify({
+            "mesaj": "Veri çözüldü",
+            "decrypted": decrypted
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Security modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -2226,6 +2515,7 @@ if __name__ == '__main__':
         print("Database tables created successfully!")
     
     app.run(host='0.0.0.0', debug=True, port=5000)
+
 
 
 
