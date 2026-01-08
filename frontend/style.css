@@ -2258,6 +2258,322 @@ textarea {
     }
 }
 
+/* ===== PHASE 6: OSINT TOOLS STYLES ===== */
+#osintView {
+    height: 100%;
+    overflow-y: auto;
+}
+
+.osint-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: var(--space-lg);
+}
+
+.osint-status {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.api-status-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    margin-bottom: var(--space-sm);
+}
+
+.api-status {
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.api-status.active {
+    background: rgba(76, 175, 80, 0.2);
+    color: #4CAF50;
+}
+
+.api-status.inactive {
+    background: rgba(158, 158, 158, 0.2);
+    color: #9E9E9E;
+}
+
+.api-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin: 0;
+}
+
+/* OSINT Tabs */
+.osint-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: var(--space-sm);
+}
+
+.osint-tab {
+    padding: var(--space-sm) var(--space-md);
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    transition: all var(--transition-fast);
+    font-size: 0.9rem;
+}
+
+.osint-tab:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+}
+
+.osint-tab.active {
+    background: var(--color-primary);
+    color: white;
+}
+
+/* OSINT Tab Content */
+.osint-tab-content {
+    display: none;
+}
+
+.osint-tab-content.active {
+    display: block;
+}
+
+/* OSINT Forms */
+.osint-form {
+    background: var(--color-bg-card);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-md);
+}
+
+.osint-form h3 {
+    margin: 0 0 var(--space-xs);
+    color: var(--color-primary-light);
+    font-size: 1.1rem;
+}
+
+.form-desc {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    margin-bottom: var(--space-md);
+}
+
+.osint-form .form-row {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.input-lg {
+    flex: 1;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-size: 1rem;
+}
+
+.input-lg:focus {
+    border-color: var(--color-primary);
+    outline: none;
+}
+
+.osint-container hr {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: var(--space-lg) 0;
+}
+
+/* OSINT Results */
+.osint-result {
+    margin-top: var(--space-md);
+}
+
+.osint-result .loading {
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+.result-success,
+.result-danger,
+.result-warning,
+.result-error,
+.result-info {
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    margin-top: var(--space-sm);
+}
+
+.result-success {
+    background: rgba(76, 175, 80, 0.15);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    color: #81C784;
+}
+
+.result-danger {
+    background: rgba(244, 67, 54, 0.15);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+    color: #EF9A9A;
+}
+
+.result-warning {
+    background: rgba(255, 152, 0, 0.15);
+    border: 1px solid rgba(255, 152, 0, 0.3);
+    color: #FFB74D;
+}
+
+.result-error {
+    background: rgba(158, 158, 158, 0.15);
+    border: 1px solid rgba(158, 158, 158, 0.3);
+    color: #BDBDBD;
+}
+
+.result-info {
+    background: rgba(33, 150, 243, 0.15);
+    border: 1px solid rgba(33, 150, 243, 0.3);
+    color: #64B5F6;
+}
+
+.result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-sm);
+}
+
+.result-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    font-size: 0.85rem;
+}
+
+.result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+    font-size: 0.85rem;
+}
+
+/* Breach List */
+.breach-list {
+    margin-top: var(--space-sm);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.breach-item {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-sm);
+    padding: var(--space-sm);
+    margin-bottom: var(--space-xs);
+}
+
+.breach-item strong {
+    display: block;
+}
+
+.breach-date {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.breach-data {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: var(--space-xs);
+}
+
+/* Email List */
+.email-list {
+    margin-top: var(--space-sm);
+}
+
+.email-item {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-xs) 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.email-value {
+    font-family: monospace;
+}
+
+.email-meta {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+/* VirusTotal Stats */
+.vt-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin: var(--space-sm) 0;
+}
+
+.vt-stats .stat {
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+}
+
+.stat.safe {
+    background: rgba(76, 175, 80, 0.2);
+    color: #81C784;
+}
+
+.stat.danger {
+    background: rgba(244, 67, 54, 0.2);
+    color: #EF9A9A;
+}
+
+.stat.warning {
+    background: rgba(255, 152, 0, 0.2);
+    color: #FFB74D;
+}
+
+.stat.neutral {
+    background: rgba(158, 158, 158, 0.2);
+    color: #BDBDBD;
+}
+
+/* Vulnerabilities Warning */
+.vulns-warning {
+    background: rgba(244, 67, 54, 0.2);
+    border-radius: var(--radius-sm);
+    padding: var(--space-sm);
+    margin-top: var(--space-sm);
+    font-size: 0.85rem;
+}
+
+/* Responsive OSINT */
+@media (max-width: 768px) {
+    .osint-container {
+        padding: var(--space-md);
+    }
+
+    .osint-form .form-row {
+        flex-direction: column;
+    }
+
+    .osint-tabs {
+        justify-content: center;
+    }
+}
+
 /* ===== REDUCED MOTION ===== */
 @media (prefers-reduced-motion: reduce) {
 

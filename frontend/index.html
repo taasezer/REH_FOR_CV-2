@@ -138,6 +138,10 @@
                     <span class="nav-icon">⬡</span>
                     <span>Ağ Grafiği</span>
                 </a>
+                <a href="#" class="nav-item" data-view="osint">
+                    <span class="nav-icon">🔍</span>
+                    <span>OSINT Araçları</span>
+                </a>
                 <a href="#" class="nav-item" data-view="add">
                     <span class="nav-icon">⊕</span>
                     <span>Kişi Ekle</span>
@@ -342,6 +346,115 @@
                             <div class="legend-item">
                                 <span class="legend-color" style="background: #9E9E9E;"></span>
                                 <span>Diğer</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OSINT Tools View (Phase 6) -->
+                <div id="osintView" class="view">
+                    <div class="osint-container">
+                        <!-- API Status -->
+                        <div class="osint-status" id="osintApiStatus">
+                            <span class="status-loading">API durumları yükleniyor...</span>
+                        </div>
+
+                        <!-- Tabs -->
+                        <div class="osint-tabs">
+                            <button class="osint-tab active" data-tab="breach">🔓 İhlal Kontrolü</button>
+                            <button class="osint-tab" data-tab="email">📧 E-posta Doğrulama</button>
+                            <button class="osint-tab" data-tab="ip">🌐 IP Lookup</button>
+                            <button class="osint-tab" data-tab="domain">🔍 Domain Analizi</button>
+                        </div>
+
+                        <!-- Tab Content: Breach Check -->
+                        <div class="osint-tab-content active" id="breachTab">
+                            <div class="osint-form">
+                                <h3>HaveIBeenPwned Kontrolü</h3>
+                                <p class="form-desc">E-posta adresinin veri ihlallerinde olup olmadığını kontrol edin.
+                                </p>
+                                <div class="form-row">
+                                    <input type="email" id="hibpEmail" placeholder="E-posta adresi" class="input-lg">
+                                    <button type="button" id="checkHibpBtn" class="btn btn-primary">Kontrol Et</button>
+                                </div>
+                                <div class="osint-result" id="hibpResult"></div>
+                            </div>
+                            <hr>
+                            <div class="osint-form">
+                                <h3>Şifre Kontrolü (k-Anonymity)</h3>
+                                <p class="form-desc">Şifrenizin veri ihlallerinde görülüp görülmediğini güvenli kontrol.
+                                </p>
+                                <div class="form-row">
+                                    <input type="password" id="hibpPassword" placeholder="Şifre" class="input-lg">
+                                    <button type="button" id="checkPasswordBtn" class="btn btn-secondary">Kontrol
+                                        Et</button>
+                                </div>
+                                <div class="osint-result" id="passwordResult"></div>
+                            </div>
+                        </div>
+
+                        <!-- Tab Content: Email Verification -->
+                        <div class="osint-tab-content" id="emailTab">
+                            <div class="osint-form">
+                                <h3>Hunter.io E-posta Doğrulama</h3>
+                                <p class="form-desc">E-posta adresinin gerçek ve ulaşılabilir olup olmadığını
+                                    doğrulayın.</p>
+                                <div class="form-row">
+                                    <input type="email" id="hunterEmail" placeholder="E-posta adresi" class="input-lg">
+                                    <button type="button" id="verifyHunterBtn" class="btn btn-primary">Doğrula</button>
+                                </div>
+                                <div class="osint-result" id="hunterResult"></div>
+                            </div>
+                            <hr>
+                            <div class="osint-form">
+                                <h3>Domain E-posta Araması</h3>
+                                <p class="form-desc">Bir domain'e ait e-posta adreslerini bulun.</p>
+                                <div class="form-row">
+                                    <input type="text" id="hunterDomain" placeholder="example.com" class="input-lg">
+                                    <button type="button" id="searchDomainBtn" class="btn btn-secondary">Ara</button>
+                                </div>
+                                <div class="osint-result" id="domainSearchResult"></div>
+                            </div>
+                        </div>
+
+                        <!-- Tab Content: IP Lookup -->
+                        <div class="osint-tab-content" id="ipTab">
+                            <div class="osint-form">
+                                <h3>Shodan IP Lookup</h3>
+                                <p class="form-desc">IP adresi hakkında detaylı bilgi alın (portlar, servisler, güvenlik
+                                    açıkları).</p>
+                                <div class="form-row">
+                                    <input type="text" id="shodanIp" placeholder="8.8.8.8" class="input-lg">
+                                    <button type="button" id="lookupIpBtn" class="btn btn-primary">Ara</button>
+                                </div>
+                                <div class="osint-result" id="shodanResult"></div>
+                            </div>
+                        </div>
+
+                        <!-- Tab Content: Domain Analysis -->
+                        <div class="osint-tab-content" id="domainTab">
+                            <div class="osint-form">
+                                <h3>VirusTotal Domain Analizi</h3>
+                                <p class="form-desc">Domain'in güvenlik durumunu ve zararlı içerik içerip içermediğini
+                                    kontrol edin.</p>
+                                <div class="form-row">
+                                    <input type="text" id="vtDomain" placeholder="example.com" class="input-lg">
+                                    <button type="button" id="analyzeDomainBtn" class="btn btn-primary">Analiz
+                                        Et</button>
+                                </div>
+                                <div class="osint-result" id="vtDomainResult"></div>
+                            </div>
+                            <hr>
+                            <div class="osint-form">
+                                <h3>VirusTotal URL Kontrolü</h3>
+                                <p class="form-desc">URL'nin zararlı olup olmadığını kontrol edin.</p>
+                                <div class="form-row">
+                                    <input type="url" id="vtUrl" placeholder="https://example.com/page"
+                                        class="input-lg">
+                                    <button type="button" id="analyzeUrlBtn" class="btn btn-secondary">Kontrol
+                                        Et</button>
+                                </div>
+                                <div class="osint-result" id="vtUrlResult"></div>
                             </div>
                         </div>
                     </div>

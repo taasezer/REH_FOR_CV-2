@@ -1475,6 +1475,333 @@ def get_contact_relationships(kisi_id):
 
 
 # =============================================================================
+# PHASE 6: EXTERNAL API INTEGRATION ENDPOINTS
+# =============================================================================
+
+@app.route('/api/external/status', methods=['GET'])
+@jwt_required()
+def get_external_api_status():
+    """Harici API durumları"""
+    try:
+        from external_apis import ExternalAPIManager
+        
+        manager = ExternalAPIManager()
+        status = manager.get_api_status()
+        
+        return jsonify({
+            "mesaj": "API durumları",
+            "apis": status,
+            "configured_count": sum(1 for v in status.values() if v),
+            "total_count": len(status)
+        })
+        
+    except ImportError:
+        return jsonify({"error": "External APIs modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/external/hibp/email', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def check_hibp_email():
+    """HaveIBeenPwned e-posta ihlal kontrolü"""
+    try:
+        from external_apis import HaveIBeenPwnedAPI
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "E-posta adresi gerekli"}), 400
+        
+        hibp = HaveIBeenPwnedAPI()
+        result = hibp.check_email_breaches(email)
+        
+        log_action('check', 'hibp_email', None, kullanici.id, f"HIBP kontrolü: {email}")
+        
+        return jsonify({
+            "mesaj": "HIBP kontrolü tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "External APIs modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/external/hibp/password', methods=['POST'])
+@jwt_required()
+@limiter.limit("20 per minute")
+def check_hibp_password():
+    """HaveIBeenPwned şifre ihlal kontrolü (k-Anonymity)"""
+    try:
+        from external_apis import HaveIBeenPwnedAPI
+        
+        data = request.get_json()
+        password = data.get('password')
+        
+        if not password:
+            return jsonify({"error": "Şifre gerekli"}), 400
+        
+        hibp = HaveIBeenPwnedAPI()
+        result = hibp.check_password_pwned(password)
+        
+        return jsonify({
+            "mesaj": "Şifre kontrolü tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "External APIs modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/external/hunter/verify', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def verify_hunter_email():
+    """Hunter.io e-posta doğrulama"""
+    try:
+        from external_apis import HunterIOAPI
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "E-posta adresi gerekli"}), 400
+        
+        hunter = HunterIOAPI()
+        result = hunter.verify_email(email)
+        
+        log_action('check', 'hunter_email', None, kullanici.id, f"Hunter kontrolü: {email}")
+        
+        return jsonify({
+            "mesaj": "E-posta doğrulama tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "External APIs modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/external/hunter/domain', methods=['POST'])
+@jwt_required()
+@limiter.limit("5 per minute")
+def search_hunter_domain():
+    """Hunter.io domain e-posta araması"""
+    try:
+        from external_apis import HunterIOAPI
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        domain = data.get('domain')
+        
+        if not domain:
+            return jsonify({"error": "Domain gerekli"}), 400
+        
+        hunter = HunterIOAPI()
+        result = hunter.domain_search(domain)
+        
+        log_action('check', 'hunter_domain', None, kullanici.id, f"Domain araması: {domain}")
+        
+        return jsonify({
+            "mesaj": "Domain araması tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "External APIs modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/external/shodan/ip', methods=['POST'])
+@jwt_required()
+@limiter.limit("5 per minute")
+def lookup_shodan_ip():
+    """Shodan IP lookup"""
+    try:
+        from external_apis import ShodanAPI
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        ip = data.get('ip')
+        
+        if not ip:
+            return jsonify({"error": "IP adresi gerekli"}), 400
+        
+        shodan = ShodanAPI()
+        result = shodan.lookup_ip(ip)
+        
+        log_action('check', 'shodan_ip', None, kullanici.id, f"Shodan IP: {ip}")
+        
+        return jsonify({
+            "mesaj": "IP lookup tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "External APIs modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/external/virustotal/domain', methods=['POST'])
+@jwt_required()
+@limiter.limit("4 per minute")
+def analyze_virustotal_domain():
+    """VirusTotal domain analizi"""
+    try:
+        from external_apis import VirusTotalAPI
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        domain = data.get('domain')
+        
+        if not domain:
+            return jsonify({"error": "Domain gerekli"}), 400
+        
+        vt = VirusTotalAPI()
+        result = vt.analyze_domain(domain)
+        
+        log_action('check', 'virustotal_domain', None, kullanici.id, f"VT Domain: {domain}")
+        
+        return jsonify({
+            "mesaj": "Domain analizi tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "External APIs modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/external/virustotal/url', methods=['POST'])
+@jwt_required()
+@limiter.limit("4 per minute")
+def analyze_virustotal_url():
+    """VirusTotal URL analizi"""
+    try:
+        from external_apis import VirusTotalAPI
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({"error": "URL gerekli"}), 400
+        
+        vt = VirusTotalAPI()
+        result = vt.analyze_url(url)
+        
+        log_action('check', 'virustotal_url', None, kullanici.id, f"VT URL check")
+        
+        return jsonify({
+            "mesaj": "URL analizi tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "External APIs modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/external/comprehensive/email', methods=['POST'])
+@jwt_required()
+@limiter.limit("3 per minute")
+def comprehensive_email_check():
+    """E-posta için kapsamlı kontrol (tüm API'ler)"""
+    try:
+        from external_apis import ExternalAPIManager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "E-posta adresi gerekli"}), 400
+        
+        manager = ExternalAPIManager()
+        result = manager.check_email_comprehensive(email)
+        
+        log_action('check', 'comprehensive_email', None, kullanici.id, f"Kapsamlı kontrol: {email}")
+        
+        return jsonify({
+            "mesaj": "Kapsamlı e-posta kontrolü tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "External APIs modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/external/comprehensive/domain', methods=['POST'])
+@jwt_required()
+@limiter.limit("3 per minute")
+def comprehensive_domain_check():
+    """Domain için kapsamlı kontrol"""
+    try:
+        from external_apis import ExternalAPIManager
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json()
+        domain = data.get('domain')
+        
+        if not domain:
+            return jsonify({"error": "Domain gerekli"}), 400
+        
+        manager = ExternalAPIManager()
+        result = manager.check_domain_comprehensive(domain)
+        
+        log_action('check', 'comprehensive_domain', None, kullanici.id, f"Kapsamlı domain: {domain}")
+        
+        return jsonify({
+            "mesaj": "Kapsamlı domain kontrolü tamamlandı",
+            "sonuc": result
+        })
+        
+    except ImportError:
+        return jsonify({"error": "External APIs modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -1484,6 +1811,7 @@ if __name__ == '__main__':
         print("Database tables created successfully!")
     
     app.run(host='0.0.0.0', debug=True, port=5000)
+
 
 
 

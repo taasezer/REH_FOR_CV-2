@@ -283,6 +283,7 @@ function switchView(viewName) {
         contacts: 'Kişiler',
         map: 'Harita',
         network: 'Ağ Grafiği',
+        osint: 'OSINT Araçları',
         add: 'Kişi Ekle'
     };
     document.getElementById('pageTitle').textContent = titles[viewName] || 'Dashboard';
@@ -292,6 +293,7 @@ function switchView(viewName) {
     if (viewName === 'contacts') loadContacts();
     if (viewName === 'map') loadMapMarkers();
     if (viewName === 'network') loadNetworkGraph();
+    if (viewName === 'osint') loadOsintTools();
     if (viewName === 'add') resetContactForm();
 }
 
@@ -1543,6 +1545,441 @@ function initNetworkEvents() {
 }
 
 // =============================================================================
+// PHASE 6: OSINT TOOLS
+// =============================================================================
+
+/**
+ * Load OSINT view and API status
+ */
+async function loadOsintTools() {
+    try {
+        const response = await apiRequest('/api/external/status');
+        const data = await response.json();
+
+        if (response.ok) {
+            const statusEl = document.getElementById('osintApiStatus');
+            const apis = data.apis;
+
+            statusEl.innerHTML = `
+                <div class="api-status-grid">
+                    <span class="api-status ${apis.haveibeenpwned ? 'active' : 'inactive'}">
+                        🔓 HIBP ${apis.haveibeenpwned ? '✓' : '✗'}
+                    </span>
+                    <span class="api-status ${apis.hunter ? 'active' : 'inactive'}">
+                        📧 Hunter ${apis.hunter ? '✓' : '✗'}
+                    </span>
+                    <span class="api-status ${apis.shodan ? 'active' : 'inactive'}">
+                        🌐 Shodan ${apis.shodan ? '✓' : '✗'}
+                    </span>
+                    <span class="api-status ${apis.virustotal ? 'active' : 'inactive'}">
+                        🛡️ VirusTotal ${apis.virustotal ? '✓' : '✗'}
+                    </span>
+                </div>
+                <p class="api-hint">${data.configured_count}/${data.total_count} API yapılandırılmış. 
+                API olmadan şifre kontrolü çalışır.</p>
+            `;
+        }
+    } catch (error) {
+        console.error('OSINT status error:', error);
+    }
+}
+
+/**
+ * Check email breaches (HIBP)
+ */
+async function checkHibpEmail() {
+    const email = document.getElementById('hibpEmail').value;
+    if (!email) {
+        showToast('Uyarı', 'E-posta adresi girin', 'warning');
+        return;
+    }
+
+    const resultEl = document.getElementById('hibpResult');
+    resultEl.innerHTML = '<div class="loading">Kontrol ediliyor...</div>';
+
+    try {
+        const response = await apiRequest('/api/external/hibp/email', {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.sonuc) {
+            const result = data.sonuc;
+            if (result.error) {
+                resultEl.innerHTML = `<div class="result-error">⚠️ ${result.error}</div>`;
+            } else if (result.pwned) {
+                resultEl.innerHTML = `
+                    <div class="result-danger">
+                        <h4>⚠️ ${result.breach_count} ihlalde bulundu!</h4>
+                        <div class="breach-list">
+                            ${result.breaches.map(b => `
+                                <div class="breach-item">
+                                    <strong>${b.title}</strong>
+                                    <span class="breach-date">${b.breach_date}</span>
+                                    <div class="breach-data">${b.data_classes.join(', ')}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                resultEl.innerHTML = `<div class="result-success">✅ Bu e-posta bilinen ihlallerde bulunamadı.</div>`;
+            }
+        } else {
+            resultEl.innerHTML = `<div class="result-error">Hata: ${data.error || 'Bilinmeyen hata'}</div>`;
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<div class="result-error">Bağlantı hatası</div>`;
+    }
+}
+
+/**
+ * Check password breaches (HIBP k-Anonymity)
+ */
+async function checkHibpPassword() {
+    const password = document.getElementById('hibpPassword').value;
+    if (!password) {
+        showToast('Uyarı', 'Şifre girin', 'warning');
+        return;
+    }
+
+    const resultEl = document.getElementById('passwordResult');
+    resultEl.innerHTML = '<div class="loading">Kontrol ediliyor...</div>';
+
+    try {
+        const response = await apiRequest('/api/external/hibp/password', {
+            method: 'POST',
+            body: JSON.stringify({ password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.sonuc) {
+            const result = data.sonuc;
+            if (result.pwned) {
+                resultEl.innerHTML = `
+                    <div class="result-danger">
+                        ⚠️ Bu şifre <strong>${result.count.toLocaleString()}</strong> kez veri ihlallerinde görülmüş!
+                        <p>Bu şifreyi kullanmayın veya hemen değiştirin.</p>
+                    </div>
+                `;
+            } else {
+                resultEl.innerHTML = `<div class="result-success">✅ Bu şifre bilinen ihlallerde bulunamadı.</div>`;
+            }
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<div class="result-error">Bağlantı hatası</div>`;
+    }
+}
+
+/**
+ * Verify email with Hunter.io
+ */
+async function verifyHunterEmail() {
+    const email = document.getElementById('hunterEmail').value;
+    if (!email) {
+        showToast('Uyarı', 'E-posta adresi girin', 'warning');
+        return;
+    }
+
+    const resultEl = document.getElementById('hunterResult');
+    resultEl.innerHTML = '<div class="loading">Doğrulanıyor...</div>';
+
+    try {
+        const response = await apiRequest('/api/external/hunter/verify', {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.sonuc) {
+            const r = data.sonuc;
+            if (r.error) {
+                resultEl.innerHTML = `<div class="result-error">⚠️ ${r.error}</div>`;
+            } else {
+                const statusClass = r.result === 'deliverable' ? 'success' :
+                    r.result === 'risky' ? 'warning' : 'danger';
+                resultEl.innerHTML = `
+                    <div class="result-${statusClass}">
+                        <div class="result-header">
+                            <strong>${r.result?.toUpperCase()}</strong>
+                            <span class="score">Skor: ${r.score}/100</span>
+                        </div>
+                        <div class="result-details">
+                            <span>MX Kayıtları: ${r.mx_records ? '✓' : '✗'}</span>
+                            <span>SMTP Doğrulama: ${r.smtp_check ? '✓' : '✗'}</span>
+                            <span>Webmail: ${r.webmail ? 'Evet' : 'Hayır'}</span>
+                            <span>Tek Kullanımlık: ${r.disposable ? '⚠️ Evet' : 'Hayır'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<div class="result-error">Bağlantı hatası</div>`;
+    }
+}
+
+/**
+ * Search domain emails with Hunter.io
+ */
+async function searchHunterDomain() {
+    const domain = document.getElementById('hunterDomain').value;
+    if (!domain) {
+        showToast('Uyarı', 'Domain girin', 'warning');
+        return;
+    }
+
+    const resultEl = document.getElementById('domainSearchResult');
+    resultEl.innerHTML = '<div class="loading">Aranıyor...</div>';
+
+    try {
+        const response = await apiRequest('/api/external/hunter/domain', {
+            method: 'POST',
+            body: JSON.stringify({ domain })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.sonuc) {
+            const r = data.sonuc;
+            if (r.error) {
+                resultEl.innerHTML = `<div class="result-error">⚠️ ${r.error}</div>`;
+            } else {
+                resultEl.innerHTML = `
+                    <div class="result-info">
+                        <div class="result-header">
+                            <strong>${r.organization || domain}</strong>
+                            <span>${r.email_count} e-posta bulundu</span>
+                        </div>
+                        ${r.emails.length > 0 ? `
+                            <div class="email-list">
+                                ${r.emails.slice(0, 10).map(e => `
+                                    <div class="email-item">
+                                        <span class="email-value">${e.value}</span>
+                                        <span class="email-meta">${e.first_name || ''} ${e.last_name || ''}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : '<p>E-posta bulunamadı.</p>'}
+                    </div>
+                `;
+            }
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<div class="result-error">Bağlantı hatası</div>`;
+    }
+}
+
+/**
+ * Lookup IP with Shodan
+ */
+async function lookupShodanIp() {
+    const ip = document.getElementById('shodanIp').value;
+    if (!ip) {
+        showToast('Uyarı', 'IP adresi girin', 'warning');
+        return;
+    }
+
+    const resultEl = document.getElementById('shodanResult');
+    resultEl.innerHTML = '<div class="loading">Aranıyor...</div>';
+
+    try {
+        const response = await apiRequest('/api/external/shodan/ip', {
+            method: 'POST',
+            body: JSON.stringify({ ip })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.sonuc) {
+            const r = data.sonuc;
+            if (r.error) {
+                resultEl.innerHTML = `<div class="result-error">⚠️ ${r.error}</div>`;
+            } else if (r.found) {
+                resultEl.innerHTML = `
+                    <div class="result-info">
+                        <div class="result-header">
+                            <strong>${r.ip_str}</strong>
+                            <span>${r.country_name || ''}</span>
+                        </div>
+                        <div class="result-grid">
+                            <div><strong>ISP:</strong> ${r.isp || '-'}</div>
+                            <div><strong>Org:</strong> ${r.org || '-'}</div>
+                            <div><strong>ASN:</strong> ${r.asn || '-'}</div>
+                            <div><strong>Şehir:</strong> ${r.city || '-'}</div>
+                            <div><strong>OS:</strong> ${r.os || '-'}</div>
+                            <div><strong>Portlar:</strong> ${r.ports?.join(', ') || '-'}</div>
+                        </div>
+                        ${r.vulns && r.vulns.length > 0 ? `
+                            <div class="vulns-warning">
+                                ⚠️ <strong>${r.vulns.length}</strong> güvenlik açığı tespit edildi:
+                                <span>${r.vulns.slice(0, 5).join(', ')}</span>
+                            </div>
+                        ` : ''}
+                        ${r.hostnames && r.hostnames.length > 0 ? `
+                            <div><strong>Hostnames:</strong> ${r.hostnames.join(', ')}</div>
+                        ` : ''}
+                    </div>
+                `;
+            } else {
+                resultEl.innerHTML = `<div class="result-warning">${r.message || 'IP bulunamadı'}</div>`;
+            }
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<div class="result-error">Bağlantı hatası</div>`;
+    }
+}
+
+/**
+ * Analyze domain with VirusTotal
+ */
+async function analyzeVtDomain() {
+    const domain = document.getElementById('vtDomain').value;
+    if (!domain) {
+        showToast('Uyarı', 'Domain girin', 'warning');
+        return;
+    }
+
+    const resultEl = document.getElementById('vtDomainResult');
+    resultEl.innerHTML = '<div class="loading">Analiz ediliyor...</div>';
+
+    try {
+        const response = await apiRequest('/api/external/virustotal/domain', {
+            method: 'POST',
+            body: JSON.stringify({ domain })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.sonuc) {
+            const r = data.sonuc;
+            if (r.error) {
+                resultEl.innerHTML = `<div class="result-error">⚠️ ${r.error}</div>`;
+            } else if (r.analyzed) {
+                const stats = r.last_analysis_stats || {};
+                const isSafe = stats.malicious === 0 && stats.suspicious === 0;
+
+                resultEl.innerHTML = `
+                    <div class="result-${isSafe ? 'success' : 'danger'}">
+                        <div class="result-header">
+                            <strong>${domain}</strong>
+                            <span class="reputation">Reputation: ${r.reputation || 0}</span>
+                        </div>
+                        <div class="vt-stats">
+                            <span class="stat safe">✓ ${stats.harmless || 0} Güvenli</span>
+                            <span class="stat danger">✗ ${stats.malicious || 0} Zararlı</span>
+                            <span class="stat warning">⚠ ${stats.suspicious || 0} Şüpheli</span>
+                            <span class="stat neutral">? ${stats.undetected || 0} Bilinmiyor</span>
+                        </div>
+                        ${r.categories ? `
+                            <div><strong>Kategoriler:</strong> ${Object.values(r.categories).join(', ')}</div>
+                        ` : ''}
+                    </div>
+                `;
+            } else {
+                resultEl.innerHTML = `<div class="result-warning">${r.message || 'Domain bulunamadı'}</div>`;
+            }
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<div class="result-error">Bağlantı hatası</div>`;
+    }
+}
+
+/**
+ * Analyze URL with VirusTotal
+ */
+async function analyzeVtUrl() {
+    const url = document.getElementById('vtUrl').value;
+    if (!url) {
+        showToast('Uyarı', 'URL girin', 'warning');
+        return;
+    }
+
+    const resultEl = document.getElementById('vtUrlResult');
+    resultEl.innerHTML = '<div class="loading">Kontrol ediliyor...</div>';
+
+    try {
+        const response = await apiRequest('/api/external/virustotal/url', {
+            method: 'POST',
+            body: JSON.stringify({ url })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.sonuc) {
+            const r = data.sonuc;
+            if (r.error) {
+                resultEl.innerHTML = `<div class="result-error">⚠️ ${r.error}</div>`;
+            } else if (r.analyzed) {
+                const stats = r.last_analysis_stats || {};
+                const isSafe = stats.malicious === 0;
+
+                resultEl.innerHTML = `
+                    <div class="result-${isSafe ? 'success' : 'danger'}">
+                        <h4>${isSafe ? '✅ Güvenli görünüyor' : '⚠️ Zararlı içerik tespit edildi!'}</h4>
+                        <div class="vt-stats">
+                            <span class="stat safe">✓ ${stats.harmless || 0}</span>
+                            <span class="stat danger">✗ ${stats.malicious || 0}</span>
+                            <span class="stat warning">⚠ ${stats.suspicious || 0}</span>
+                        </div>
+                        ${r.title ? `<div><strong>Sayfa:</strong> ${r.title}</div>` : ''}
+                    </div>
+                `;
+            } else if (r.scan_submitted) {
+                resultEl.innerHTML = `<div class="result-info">📤 ${r.message}</div>`;
+            }
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<div class="result-error">Bağlantı hatası</div>`;
+    }
+}
+
+/**
+ * Switch OSINT tabs
+ */
+function switchOsintTab(tabName) {
+    // Update tabs
+    document.querySelectorAll('.osint-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+
+    // Update content
+    document.querySelectorAll('.osint-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(`${tabName}Tab`)?.classList.add('active');
+}
+
+/**
+ * Initialize OSINT event listeners
+ */
+function initOsintEvents() {
+    // Tab switching
+    document.querySelectorAll('.osint-tab').forEach(tab => {
+        tab.addEventListener('click', () => switchOsintTab(tab.dataset.tab));
+    });
+
+    // HIBP
+    document.getElementById('checkHibpBtn')?.addEventListener('click', checkHibpEmail);
+    document.getElementById('checkPasswordBtn')?.addEventListener('click', checkHibpPassword);
+
+    // Hunter
+    document.getElementById('verifyHunterBtn')?.addEventListener('click', verifyHunterEmail);
+    document.getElementById('searchDomainBtn')?.addEventListener('click', searchHunterDomain);
+
+    // Shodan
+    document.getElementById('lookupIpBtn')?.addEventListener('click', lookupShodanIp);
+
+    // VirusTotal
+    document.getElementById('analyzeDomainBtn')?.addEventListener('click', analyzeVtDomain);
+    document.getElementById('analyzeUrlBtn')?.addEventListener('click', analyzeVtUrl);
+}
+
+// =============================================================================
 // EVENT LISTENERS
 // =============================================================================
 
@@ -1559,6 +1996,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Phase 5: Initialize network events
     initNetworkEvents();
+
+    // Phase 6: Initialize OSINT events
+    initOsintEvents();
 
     // Auth form toggles
     document.getElementById('showRegister')?.addEventListener('click', (e) => {
