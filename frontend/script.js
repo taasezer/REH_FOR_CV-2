@@ -412,7 +412,9 @@ async function loadDashboard() {
 
 async function loadContacts() {
     const container = document.getElementById('contactsList');
-    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    // Phase 2: Use skeleton loading instead of spinner
+    container.innerHTML = generateSkeletonCards(6);
+
 
     try {
         const params = new URLSearchParams({
@@ -440,15 +442,22 @@ async function loadContacts() {
             if (state.contacts.length === 0) {
                 container.innerHTML = '<p class="empty-state">Henüz kişi eklenmemiş veya arama sonucu bulunamadı</p>';
             } else {
-                container.innerHTML = state.contacts.map(contact => `
-                    <div class="contact-card ${contact.favori ? 'favorite' : ''}" onclick="showContactDetail(${contact.id})">
+                // Phase 2: Add stagger animation class to grid
+                container.className = 'contacts-grid stagger-animation';
+                container.innerHTML = state.contacts.map((contact, index) => `
+                    <div class="contact-card ${contact.favori ? 'favorite' : ''} animate-slide-up" 
+                         style="animation-delay: ${index * 0.05}s"
+                         onclick="showContactDetail(${contact.id})"
+                         tabindex="0"
+                         role="button"
+                         aria-label="${contact.tam_isim} kişi kartı">
                         <div class="contact-card-header">
                             <div class="contact-avatar">${getInitials(contact.isim, contact.soyisim)}</div>
                             <span class="contact-name">${contact.tam_isim}</span>
                         </div>
                         <div class="contact-info">
-                            ${contact.eposta ? `<p>✉ ${contact.eposta}</p>` : ''}
-                            ${contact.telefon ? `<p>☎ ${contact.telefon}</p>` : ''}
+                            ${contact.eposta ? `<p class="tooltip" data-tooltip="Kopyalamak için tıklayın" onclick="event.stopPropagation(); copyToClipboard('${contact.eposta}', 'E-posta')">✉ ${contact.eposta}</p>` : ''}
+                            ${contact.telefon ? `<p class="tooltip" data-tooltip="Kopyalamak için tıklayın" onclick="event.stopPropagation(); copyToClipboard('${contact.telefon}', 'Telefon')">☎ ${contact.telefon}</p>` : ''}
                             ${contact.adres ? `<p>◈ ${contact.adres.substring(0, 40)}${contact.adres.length > 40 ? '...' : ''}</p>` : ''}
                         </div>
                         ${contact.etiketler?.length ? `
@@ -464,7 +473,7 @@ async function loadContacts() {
             loadTags();
         }
     } catch (error) {
-        container.innerHTML = '<p class="empty-state">Yüklenirken hata oluştu</p>';
+        container.innerHTML = generateEmptyState('⚠', 'Bağlantı Hatası', 'Kişiler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.', 'Yeniden Dene', 'loadContacts()');
         console.error('Load contacts error:', error);
     }
 }
@@ -853,9 +862,86 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    // =========================================================================
+    // PHASE 2: Mobile Menu & Keyboard Shortcuts
+    // =========================================================================
+
+    // Mobile Menu Toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    menuToggle?.addEventListener('click', () => {
+        menuToggle.classList.toggle('active');
+        sidebar?.classList.toggle('open');
+        sidebarOverlay?.classList.toggle('active');
+    });
+
+    sidebarOverlay?.addEventListener('click', () => {
+        menuToggle?.classList.remove('active');
+        sidebar?.classList.remove('open');
+        sidebarOverlay?.classList.remove('active');
+    });
+
+    // Close mobile menu on nav item click
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                menuToggle?.classList.remove('active');
+                sidebar?.classList.remove('open');
+                sidebarOverlay?.classList.remove('active');
+            }
+        });
+    });
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+        // Ctrl+K - Focus search
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            const searchInput = document.getElementById('globalSearch');
+            if (searchInput) {
+                searchInput.focus();
+                switchView('contacts');
+            }
+        }
+
+        // Escape - Close modals
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal.active').forEach(modal => {
+                modal.classList.remove('active');
+            });
+            // Close mobile menu
+            menuToggle?.classList.remove('active');
+            sidebar?.classList.remove('open');
+            sidebarOverlay?.classList.remove('active');
+        }
+
+        // Ctrl+N - New contact
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n' && state.accessToken) {
+            e.preventDefault();
+            switchView('add');
+        }
+    });
+
+    // Resize handler for mobile menu
+    window.addEventListener('resize', debounce(() => {
+        if (window.innerWidth > 768) {
+            menuToggle?.classList.remove('active');
+            sidebar?.classList.remove('open');
+            sidebarOverlay?.classList.remove('active');
+        }
+    }, 100));
 });
 
-// Debounce helper
+// =============================================================================
+// UTILITY FUNCTIONS (Phase 2)
+// =============================================================================
+
+/**
+ * Debounce helper
+ */
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -864,6 +950,96 @@ function debounce(func, wait) {
     };
 }
 
+/**
+ * Generate skeleton loading cards
+ */
+function generateSkeletonCards(count = 6) {
+    let html = '';
+    for (let i = 0; i < count; i++) {
+        html += `
+            <div class="skeleton-card animate-slide-up" style="animation-delay: ${i * 0.05}s">
+                <div class="contact-card-header">
+                    <div class="skeleton skeleton-avatar"></div>
+                    <div style="flex: 1;">
+                        <div class="skeleton skeleton-text short"></div>
+                    </div>
+                </div>
+                <div class="contact-info">
+                    <div class="skeleton skeleton-text medium"></div>
+                    <div class="skeleton skeleton-text long"></div>
+                </div>
+            </div>
+        `;
+    }
+    return html;
+}
+
+/**
+ * Generate empty state HTML
+ */
+function generateEmptyState(icon, title, text, actionText = null, actionCallback = null) {
+    let html = `
+        <div class="empty-state">
+            <div class="empty-state-icon">${icon}</div>
+            <h3 class="empty-state-title">${title}</h3>
+            <p class="empty-state-text">${text}</p>
+    `;
+
+    if (actionText && actionCallback) {
+        html += `
+            <button class="btn btn-primary empty-state-action" onclick="${actionCallback}">
+                ${actionText}
+            </button>
+        `;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+/**
+ * Format relative time
+ */
+function formatRelativeTime(dateString) {
+    if (!dateString) return '';
+
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Az önce';
+    if (diffMins < 60) return `${diffMins} dakika önce`;
+    if (diffHours < 24) return `${diffHours} saat önce`;
+    if (diffDays < 7) return `${diffDays} gün önce`;
+
+    return formatDate(dateString);
+}
+
+/**
+ * Copy text to clipboard with toast feedback
+ */
+async function copyToClipboard(text, label = 'Metin') {
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast('Kopyalandı', `${label} panoya kopyalandı`, 'success');
+    } catch (err) {
+        showToast('Hata', 'Kopyalama başarısız', 'error');
+    }
+}
+
+/**
+ * Add ripple effect to element
+ */
+function addRippleEffect(element) {
+    element.classList.add('ripple');
+}
+
 // Make functions globally accessible
 window.showContactDetail = showContactDetail;
 window.goToPage = goToPage;
+window.copyToClipboard = copyToClipboard;
+window.generateEmptyState = generateEmptyState;
+

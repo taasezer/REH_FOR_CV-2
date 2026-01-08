@@ -1,22 +1,29 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OSINT Rehber | Kişi İstihbarat Sistemi</title>
     <meta name="description" content="Açık kaynak istihbarat rehber sistemi - Kişi yönetimi ve analizi">
-    
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/jpeg" href="logo.jpg">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <!-- ===== AUTH SCREENS ===== -->
     <div id="authScreen" class="auth-container">
@@ -24,27 +31,29 @@
         <div id="loginForm" class="auth-card">
             <div class="auth-header">
                 <div class="logo">
-                    <span class="logo-icon">◉</span>
+                    <img src="logo.jpg" alt="OSINT Rehber Logo" class="logo-image">
                     <span class="logo-text">OSINT<span class="accent">Rehber</span></span>
                 </div>
                 <p class="auth-subtitle">Kişi İstihbarat Sistemi</p>
             </div>
-            
+
             <form id="loginFormElement">
                 <div class="form-group">
                     <label for="loginUsername">Kullanıcı Adı</label>
-                    <input type="text" id="loginUsername" placeholder="Kullanıcı adınız" required autocomplete="username">
+                    <input type="text" id="loginUsername" placeholder="Kullanıcı adınız" required
+                        autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="loginPassword">Şifre</label>
-                    <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+                    <input type="password" id="loginPassword" placeholder="••••••••" required
+                        autocomplete="current-password">
                 </div>
                 <button type="submit" class="btn btn-primary btn-full">
                     <span>Giriş Yap</span>
                     <span class="btn-icon">→</span>
                 </button>
             </form>
-            
+
             <div class="auth-footer">
                 <span>Hesabınız yok mu?</span>
                 <a href="#" id="showRegister">Kayıt Ol</a>
@@ -55,12 +64,12 @@
         <div id="registerForm" class="auth-card" style="display: none;">
             <div class="auth-header">
                 <div class="logo">
-                    <span class="logo-icon">◉</span>
+                    <img src="logo.jpg" alt="OSINT Rehber Logo" class="logo-image">
                     <span class="logo-text">OSINT<span class="accent">Rehber</span></span>
                 </div>
                 <p class="auth-subtitle">Yeni Hesap Oluştur</p>
             </div>
-            
+
             <form id="registerFormElement">
                 <div class="form-group">
                     <label for="registerUsername">Kullanıcı Adı</label>
@@ -79,7 +88,7 @@
                     <span class="btn-icon">→</span>
                 </button>
             </form>
-            
+
             <div class="auth-footer">
                 <span>Zaten hesabınız var mı?</span>
                 <a href="#" id="showLogin">Giriş Yap</a>
@@ -89,15 +98,26 @@
 
     <!-- ===== MAIN APP ===== -->
     <div id="mainApp" class="app-container" style="display: none;">
+        <!-- Skip Link for Accessibility -->
+        <a href="#mainContent" class="skip-link">İçeriğe Atla</a>
+
+        <!-- Mobile Menu Toggle -->
+        <button id="menuToggle" class="menu-toggle" aria-label="Menüyü Aç/Kapat">
+            <span class="menu-toggle-icon"></span>
+        </button>
+
+        <!-- Sidebar Overlay (Mobile) -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
-                    <span class="logo-icon">◉</span>
+                    <img src="logo.jpg" alt="OSINT Rehber Logo" class="logo-image">
                     <span class="logo-text">OSINT<span class="accent">Rehber</span></span>
                 </div>
             </div>
-            
+
             <nav class="sidebar-nav">
                 <a href="#" class="nav-item active" data-view="dashboard">
                     <span class="nav-icon">⊞</span>
@@ -116,10 +136,10 @@
                     <span>Kişi Ekle</span>
                 </a>
             </nav>
-            
+
             <div class="sidebar-footer">
                 <div class="user-info">
-                    <span class="user-avatar">◉</span>
+                    <img src="logo.jpg" alt="User" class="user-avatar-img">
                     <span id="currentUsername">Kullanıcı</span>
                 </div>
                 <button id="logoutBtn" class="btn btn-ghost btn-sm">Çıkış</button>
@@ -127,7 +147,7 @@
         </aside>
 
         <!-- Main Content -->
-        <main class="main-content">
+        <main class="main-content" id="mainContent">
             <!-- Header -->
             <header class="main-header">
                 <div class="header-left">
@@ -135,7 +155,7 @@
                 </div>
                 <div class="header-right">
                     <div class="search-box">
-                        <input type="text" id="globalSearch" placeholder="Kişi ara...">
+                        <input type="text" id="globalSearch" placeholder="Kişi ara... (Ctrl+K)" aria-label="Kişi ara">
                         <span class="search-icon">⌕</span>
                     </div>
                 </div>
@@ -175,7 +195,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="dashboard-widgets">
                         <div class="widget">
                             <div class="widget-header">
@@ -219,11 +239,11 @@
                             </button>
                         </div>
                     </div>
-                    
+
                     <div id="contactsList" class="contacts-grid">
                         <p class="empty-state">Yükleniyor...</p>
                     </div>
-                    
+
                     <div id="pagination" class="pagination"></div>
                 </div>
 
@@ -238,7 +258,7 @@
                         <h2 id="formTitle">Yeni Kişi Ekle</h2>
                         <form id="contactForm">
                             <input type="hidden" id="editContactId">
-                            
+
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="contactName">İsim *</label>
@@ -249,7 +269,7 @@
                                     <input type="text" id="contactSurname" placeholder="Soyadı">
                                 </div>
                             </div>
-                            
+
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="contactEmail">E-posta</label>
@@ -260,17 +280,18 @@
                                     <input type="tel" id="contactPhone" placeholder="+90 555 123 4567">
                                 </div>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label for="contactPhone2">İkinci Telefon</label>
                                 <input type="tel" id="contactPhone2" placeholder="+90 555 987 6543">
                             </div>
-                            
+
                             <div class="form-group">
                                 <label for="contactAddress">Adres</label>
-                                <textarea id="contactAddress" placeholder="Tam adres (geocoding için)" rows="2"></textarea>
+                                <textarea id="contactAddress" placeholder="Tam adres (geocoding için)"
+                                    rows="2"></textarea>
                             </div>
-                            
+
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="contactCity">Şehir</label>
@@ -281,26 +302,27 @@
                                     <input type="text" id="contactCountry" placeholder="Ülke" value="Türkiye">
                                 </div>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label for="contactTags">Etiketler</label>
                                 <input type="text" id="contactTags" placeholder="aile, iş, arkadaş (virgülle ayırın)">
                             </div>
-                            
+
                             <div class="form-group">
                                 <label for="contactNotes">Notlar</label>
                                 <textarea id="contactNotes" placeholder="Ek notlar..." rows="3"></textarea>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="contactFavorite">
                                     <span>Favori olarak işaretle</span>
                                 </label>
                             </div>
-                            
+
                             <div class="form-actions">
-                                <button type="button" id="cancelEdit" class="btn btn-secondary" style="display: none;">İptal</button>
+                                <button type="button" id="cancelEdit" class="btn btn-secondary"
+                                    style="display: none;">İptal</button>
                                 <button type="submit" class="btn btn-primary">
                                     <span id="submitBtnText">Kişi Ekle</span>
                                 </button>
@@ -354,4 +376,5 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="script.js"></script>
 </body>
+
 </html>
