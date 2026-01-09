@@ -34,9 +34,22 @@ const state = {
 
 /**
  * Make API request with authentication
+ * Supports: apiRequest(endpoint), apiRequest(endpoint, options), apiRequest(endpoint, method, body)
  */
-async function apiRequest(endpoint, options = {}) {
+async function apiRequest(endpoint, methodOrOptions = {}, body = null) {
     const url = `${API_BASE_URL}${endpoint}`;
+
+    // Handle both call patterns: (endpoint, options) and (endpoint, method, body)
+    let options = {};
+    if (typeof methodOrOptions === 'string') {
+        options = {
+            method: methodOrOptions,
+            body: body ? JSON.stringify(body) : undefined
+        };
+    } else {
+        options = methodOrOptions;
+    }
+
     const headers = {
         'Content-Type': 'application/json',
         ...options.headers
@@ -284,6 +297,7 @@ function switchView(viewName) {
         map: 'Harita',
         network: 'Ağ Grafiği',
         osint: 'OSINT Araçları',
+        security: 'Güvenlik',
         add: 'Kişi Ekle'
     };
     document.getElementById('pageTitle').textContent = titles[viewName] || 'Dashboard';
@@ -294,6 +308,7 @@ function switchView(viewName) {
     if (viewName === 'map') loadMapMarkers();
     if (viewName === 'network') loadNetworkGraph();
     if (viewName === 'osint') loadOsintTools();
+    if (viewName === 'security') loadAuditLogs();
     if (viewName === 'add') resetContactForm();
 }
 
