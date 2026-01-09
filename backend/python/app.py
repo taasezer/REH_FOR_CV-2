@@ -50,13 +50,12 @@ db.init_app(app)
 jwt = JWTManager(app)
 
 # CORS - Tüm originlere izin ver (development için)
-CORS(app, resources={
-    r"/*": {
-        "origins": ["http://localhost:*", "http://127.0.0.1:*", "file://*"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+CORS(app, 
+     origins="*",
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+)
 
 # Rate Limiting
 limiter = Limiter(

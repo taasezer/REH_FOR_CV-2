@@ -551,9 +551,13 @@ function enableProximitySearch() {
 
     if (mapState.proximityMode) {
         showToast('Bilgi', 'Haritada bir noktaya tıklayın', 'warning');
-        state.maps.full?.getContainer().style.cursor = 'crosshair';
+        if (state.maps.full) {
+            state.maps.full.getContainer().style.cursor = 'crosshair';
+        }
     } else {
-        state.maps.full?.getContainer().style.cursor = '';
+        if (state.maps.full) {
+            state.maps.full.getContainer().style.cursor = '';
+        }
         clearProximityCircle();
     }
 }
@@ -596,7 +600,9 @@ async function handleProximityClick(e) {
     mapState.proximityMode = false;
     document.getElementById('enableProximity').classList.remove('active');
     document.getElementById('enableProximity').textContent = '🎯 Haritaya Tıkla';
-    state.maps.full?.getContainer().style.cursor = '';
+    if (state.maps.full) {
+        state.maps.full.getContainer().style.cursor = '';
+    }
 }
 
 /**
@@ -2034,7 +2040,7 @@ async function importContacts(file) {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${API_BASE}/api/import/auto`, {
+        const response = await fetch(`${API_BASE_URL}/api/import/auto`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${state.accessToken}`
