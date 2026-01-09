@@ -1,4 +1,16 @@
 services:
+  # Frontend - Nginx
+  frontend:
+    build: ./frontend
+    container_name: osint_rehber_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - web
+    restart: unless-stopped
+    networks:
+      - rehber_network
+
   # Python Flask Backend
   web:
     build: ./backend/python
@@ -44,4 +56,5 @@ networks:
 
 volumes:
   postgres_data:
+
 
