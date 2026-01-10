@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSINT Rehber | Kişi İstihbarat Sistemi</title>
+    <title>REH FOR CV | Kişi İstihbarat Sistemi</title>
     <meta name="description" content="Açık kaynak istihbarat rehber sistemi - Kişi yönetimi ve analizi">
 
     <!-- Favicon -->
@@ -116,38 +116,38 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
-                    <img src="logo.jpg" alt="OSINT Rehber Logo" class="logo-image">
-                    <span class="logo-text">OSINT<span class="accent">Rehber</span></span>
+                    <img src="logo.jpg" alt="REH FOR CV Logo" class="logo-image">
+                    <span class="logo-text">REH FOR<span class="accent">CV</span></span>
                 </div>
             </div>
 
             <nav class="sidebar-nav">
                 <a href="#" class="nav-item active" data-view="dashboard">
-                    <span class="nav-icon">⊞</span>
+                    <span class="nav-icon">DS</span>
                     <span>Dashboard</span>
                 </a>
                 <a href="#" class="nav-item" data-view="contacts">
-                    <span class="nav-icon">◎</span>
+                    <span class="nav-icon">KŞ</span>
                     <span>Kişiler</span>
                 </a>
                 <a href="#" class="nav-item" data-view="map">
-                    <span class="nav-icon">◈</span>
+                    <span class="nav-icon">HR</span>
                     <span>Harita</span>
                 </a>
                 <a href="#" class="nav-item" data-view="network">
-                    <span class="nav-icon">⬡</span>
+                    <span class="nav-icon">AG</span>
                     <span>Ağ Grafiği</span>
                 </a>
                 <a href="#" class="nav-item" data-view="osint">
-                    <span class="nav-icon">🔍</span>
+                    <span class="nav-icon">AR</span>
                     <span>OSINT Araçları</span>
                 </a>
                 <a href="#" class="nav-item" data-view="security">
-                    <span class="nav-icon">🛡️</span>
+                    <span class="nav-icon">GV</span>
                     <span>Güvenlik</span>
                 </a>
                 <a href="#" class="nav-item" data-view="add">
-                    <span class="nav-icon">⊕</span>
+                    <span class="nav-icon">EK</span>
                     <span>Kişi Ekle</span>
                 </a>
             </nav>
@@ -171,25 +171,25 @@
                 <div class="header-right">
                     <div class="search-box">
                         <input type="text" id="globalSearch" placeholder="Kişi ara... (Ctrl+K)" aria-label="Kişi ara">
-                        <span class="search-icon">⌕</span>
+                        <span class="search-icon">ARA</span>
                     </div>
                     <!-- Export/Import Dropdown -->
                     <div class="dropdown" id="exportDropdown">
                         <button class="btn btn-secondary dropdown-toggle" id="exportBtn">
-                            📥 Dışa/İçe Aktar
+                            Veri İşlemleri
                         </button>
                         <div class="dropdown-menu">
                             <div class="dropdown-section">
                                 <span class="dropdown-label">Dışa Aktar</span>
-                                <button class="dropdown-item" data-export="csv">📊 CSV</button>
-                                <button class="dropdown-item" data-export="json">📄 JSON</button>
-                                <button class="dropdown-item" data-export="vcard">👤 vCard</button>
-                                <button class="dropdown-item" data-export="report">📑 HTML Rapor</button>
+                                <button class="dropdown-item" data-export="csv">CSV</button>
+                                <button class="dropdown-item" data-export="json">JSON</button>
+                                <button class="dropdown-item" data-export="vcard">vCard</button>
+                                <button class="dropdown-item" data-export="report">HTML Rapor</button>
                             </div>
                             <div class="dropdown-divider"></div>
                             <div class="dropdown-section">
                                 <span class="dropdown-label">İçe Aktar</span>
-                                <button class="dropdown-item" id="importFileBtn">📁 Dosya Yükle</button>
+                                <button class="dropdown-item" id="importFileBtn">Dosya Yükle</button>
                                 <input type="file" id="importFileInput" accept=".csv,.json,.vcf,.vcard" hidden>
                             </div>
                         </div>
@@ -291,13 +291,13 @@
                             <label>Görünüm:</label>
                             <div class="btn-group">
                                 <button id="mapModeMarkers" class="btn btn-sm active" data-mode="markers">
-                                    📍 İşaretçiler
+                                    İşaretçiler
                                 </button>
                                 <button id="mapModeHeatmap" class="btn btn-sm" data-mode="heatmap">
-                                    🔥 Isı Haritası
+                                    Isı Haritası
                                 </button>
                                 <button id="mapModeClusters" class="btn btn-sm" data-mode="clusters">
-                                    🎯 Kümeleme
+                                    Kümeleme
                                 </button>
                             </div>
                         </div>
@@ -307,7 +307,7 @@
                                 <input type="number" id="proximityRadius" value="5" min="1" max="100" class="input-sm">
                                 <span>km</span>
                                 <button id="enableProximity" class="btn btn-sm btn-secondary">
-                                    🎯 Haritaya Tıkla
+                                    Konum Seç
                                 </button>
                             </div>
                         </div>

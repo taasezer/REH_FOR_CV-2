@@ -115,9 +115,9 @@ async function refreshAccessToken() {
 function showToast(title, message, type = 'success') {
     const container = document.getElementById('toastContainer');
     const icons = {
-        success: '✓',
-        error: '✕',
-        warning: '⚠'
+        success: 'OK',
+        error: '!',
+        warning: '!'
     };
 
     const toast = document.createElement('div');
@@ -277,19 +277,53 @@ function showRegisterForm() {
     document.getElementById('registerForm').style.display = 'block';
 }
 
+
+function destroyFullMap() {
+    if (state.maps.full) {
+        state.maps.full.remove();
+        state.maps.full = null;
+    }
+    const container = document.getElementById('fullMap');
+    if (container) {
+        container.innerHTML = '';
+        container.className = 'full-map'; // Reset classes
+    }
+    // Reset map state global variables
+    mapState.activeMode = 'markers';
+    mapState.heatLayer = null;
+    mapState.clusterGroup = null;
+    mapState.proximityCircle = null;
+    mapState.isProximityActive = false;
+}
+
+function destroyMiniMap() {
+    if (state.maps.mini) {
+        state.maps.mini.remove();
+        state.maps.mini = null;
+    }
+    const container = document.getElementById('miniMap');
+    if (container) {
+        container.innerHTML = '';
+    }
+}
+
 function switchView(viewName) {
-    // Update nav
+    // 1. Destroy maps based on target view
+    if (viewName !== 'map') destroyFullMap();
+    if (viewName !== 'dashboard') destroyMiniMap();
+
+    // 2. Update nav
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.view === viewName);
     });
 
-    // Update views
+    // 3. Update views
     document.querySelectorAll('.view').forEach(view => {
         view.classList.remove('active');
     });
     document.getElementById(`${viewName}View`).classList.add('active');
 
-    // Update header
+    // 4. Update header
     const titles = {
         dashboard: 'Dashboard',
         contacts: 'Kişiler',
@@ -301,7 +335,7 @@ function switchView(viewName) {
     };
     document.getElementById('pageTitle').textContent = titles[viewName] || 'Dashboard';
 
-    // Load view data
+    // 5. Load view data
     if (viewName === 'dashboard') loadDashboard();
     if (viewName === 'contacts') loadContacts();
     if (viewName === 'map') loadMapMarkers();
@@ -549,7 +583,7 @@ function enableProximitySearch() {
 
     const btn = document.getElementById('enableProximity');
     btn.classList.toggle('active', mapState.proximityMode);
-    btn.textContent = mapState.proximityMode ? '❌ İptal' : '🎯 Haritaya Tıkla';
+    btn.textContent = mapState.proximityMode ? 'İptal' : 'Konum Seç';
 
     if (mapState.proximityMode) {
         showToast('Bilgi', 'Haritada bir noktaya tıklayın', 'warning');
@@ -763,9 +797,9 @@ async function loadContacts() {
                             <span class="contact-name">${contact.tam_isim}</span>
                         </div>
                         <div class="contact-info">
-                            ${contact.eposta ? `<p class="tooltip" data-tooltip="Kopyalamak için tıklayın" onclick="event.stopPropagation(); copyToClipboard('${contact.eposta}', 'E-posta')">✉ ${contact.eposta}</p>` : ''}
-                            ${contact.telefon ? `<p class="tooltip" data-tooltip="Kopyalamak için tıklayın" onclick="event.stopPropagation(); copyToClipboard('${contact.telefon}', 'Telefon')">☎ ${contact.telefon}</p>` : ''}
-                            ${contact.adres ? `<p>◈ ${contact.adres.substring(0, 40)}${contact.adres.length > 40 ? '...' : ''}</p>` : ''}
+                            ${contact.eposta ? `<p class="tooltip" data-tooltip="Kopyalamak için tıklayın" onclick="event.stopPropagation(); copyToClipboard('${contact.eposta}', 'E-posta')">E-posta: ${contact.eposta}</p>` : ''}
+                            ${contact.telefon ? `<p class="tooltip" data-tooltip="Kopyalamak için tıklayın" onclick="event.stopPropagation(); copyToClipboard('${contact.telefon}', 'Telefon')">Tel: ${contact.telefon}</p>` : ''}
+                            ${contact.adres ? `<p>Konum: ${contact.adres.substring(0, 40)}${contact.adres.length > 40 ? '...' : ''}</p>` : ''}
                         </div>
                         ${contact.etiketler?.length ? `
                             <div class="contact-tags">
@@ -780,7 +814,7 @@ async function loadContacts() {
             loadTags();
         }
     } catch (error) {
-        container.innerHTML = generateEmptyState('⚠', 'Bağlantı Hatası', 'Kişiler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.', 'Yeniden Dene', 'loadContacts()');
+        container.innerHTML = generateEmptyState('!', 'Bağlantı Hatası', 'Kişiler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.', 'Yeniden Dene', 'loadContacts()');
         console.error('Load contacts error:', error);
     }
 }
@@ -812,7 +846,7 @@ function renderPagination() {
     }
 
     let html = '';
-    html += `<button ${state.currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${state.currentPage - 1})">←</button>`;
+    html += `<button ${state.currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${state.currentPage - 1})">&lt;</button>`;
 
     for (let i = 1; i <= state.totalPages; i++) {
         if (i === 1 || i === state.totalPages || (i >= state.currentPage - 2 && i <= state.currentPage + 2)) {
@@ -822,7 +856,7 @@ function renderPagination() {
         }
     }
 
-    html += `<button ${state.currentPage === state.totalPages ? 'disabled' : ''} onclick="goToPage(${state.currentPage + 1})">→</button>`;
+    html += `<button ${state.currentPage === state.totalPages ? 'disabled' : ''} onclick="goToPage(${state.currentPage + 1})">&gt;</button>`;
 
     container.innerHTML = html;
 }
@@ -901,7 +935,7 @@ async function showContactDetail(contactId) {
                 ` : ''}
                 <div class="detail-row">
                     <span class="detail-label">Favori:</span>
-                    <span class="detail-value">${contact.favori ? '★ Evet' : 'Hayır'}</span>
+                    <span class="detail-value">${contact.favori ? 'Evet' : 'Hayır'}</span>
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Eklenme:</span>
