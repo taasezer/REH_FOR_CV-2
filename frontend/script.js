@@ -265,7 +265,6 @@ function showMainApp() {
 
     // Load initial data
     loadDashboard();
-    initializeMaps();
 }
 
 function showLoginForm() {
@@ -316,27 +315,15 @@ function switchView(viewName) {
 // MAPS
 // =============================================================================
 
-function initializeMaps() {
-    // Mini map for dashboard
-    if (!state.maps.mini) {
-        state.maps.mini = L.map('miniMap').setView([39.0, 35.0], 5);
+async function loadMapMarkers() {
+    // Initialize full map if not already done
+    if (!state.maps.full && document.getElementById('fullMap')) {
+        state.maps.full = L.map('fullMap').setView([39.0, 35.0], 6);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '© OpenStreetMap © CARTO'
-        }).addTo(state.maps.mini);
+        }).addTo(state.maps.full);
     }
 
-    // Full map (lazy init)
-    setTimeout(() => {
-        if (!state.maps.full && document.getElementById('fullMap')) {
-            state.maps.full = L.map('fullMap').setView([39.0, 35.0], 6);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '© OpenStreetMap © CARTO'
-            }).addTo(state.maps.full);
-        }
-    }, 500);
-}
-
-async function loadMapMarkers() {
     try {
         const response = await apiRequest('/kisiler/harita');
         const data = await response.json();
@@ -710,11 +697,16 @@ async function loadDashboard() {
                 </div>
             `).join('');
         } else {
-            recentContainer.innerHTML = '<p class="empty-state">Henüz kişi eklenmemiş</p>';
+            recentContainer.innerHTML = '<p class="empty-state">Henuz kisi eklenmemis</p>';
         }
 
-        // Load map markers
-        loadMapMarkers();
+        // Initialize mini map for dashboard only
+        if (!state.maps.mini && document.getElementById('miniMap')) {
+            state.maps.mini = L.map('miniMap').setView([39.0, 35.0], 5);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© OpenStreetMap © CARTO'
+            }).addTo(state.maps.mini);
+        }
 
     } catch (error) {
         console.error('Dashboard error:', error);

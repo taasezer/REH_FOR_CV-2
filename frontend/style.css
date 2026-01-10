@@ -552,10 +552,16 @@ textarea {
 
 .view {
     display: none;
+    visibility: hidden;
+    position: absolute;
+    left: -9999px;
 }
 
 .view.active {
     display: block;
+    visibility: visible;
+    position: relative;
+    left: 0;
     animation: fadeIn 0.3s ease;
 }
 
@@ -748,7 +754,8 @@ textarea {
 
 /* ===== MAP ===== */
 .full-map {
-    height: calc(100vh - var(--header-height) - var(--space-lg) * 2);
+    height: 500px;
+    max-height: calc(100vh - 200px);
     border-radius: var(--radius-lg);
     overflow: hidden;
 }
@@ -1913,7 +1920,7 @@ textarea {
     flex-wrap: wrap;
     gap: var(--space-md);
     align-items: center;
-    z-index: 500;
+    position: relative;
 }
 
 .map-control-group {
