@@ -2505,6 +2505,148 @@ def decrypt_data():
 
 
 # =============================================================================
+# PHASE 9: OSINT PERSON SEARCH ENDPOINTS
+# =============================================================================
+
+@app.route('/api/osint/person-search', methods=['POST'])
+@jwt_required()
+@limiter.limit("30 per minute")
+def osint_person_search():
+    """İnternette kişi arama - e-posta ve/veya isim ile"""
+    try:
+        from person_search import search_person
+        
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json() or {}
+        email = data.get('email', '').strip()
+        name = data.get('name', '').strip()
+        
+        if not email and not name:
+            return jsonify({"error": "E-posta veya isim gerekli"}), 400
+        
+        # Arama yap
+        results = search_person(email=email if email else None, name=name if name else None)
+        
+        # Audit log
+        log_action('osint_search', 'person', None, kullanici.id, f"Arama: {email or name}")
+        
+        return jsonify({
+            "mesaj": f"{results['total_results']} sonuç bulundu",
+            "sonuclar": results
+        })
+        
+    except ImportError:
+        return jsonify({"error": "Person search modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/osint/geocode', methods=['POST'])
+@jwt_required()
+@limiter.limit("60 per minute")
+def osint_geocode():
+    """Adres → Koordinat dönüşümü"""
+    try:
+        from person_search import geocode_address
+        
+        data = request.get_json() or {}
+        address = data.get('address', '').strip()
+        
+        if not address:
+            return jsonify({"error": "Adres gerekli"}), 400
+        
+        result = geocode_address(address)
+        
+        if result:
+            return jsonify({
+                "mesaj": "Konum bulundu",
+                "konum": result
+            })
+        else:
+            return jsonify({"error": "Konum bulunamadı"}), 404
+            
+    except ImportError:
+        return jsonify({"error": "Geocoding modülü yüklenemedi"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/osint/validate-result', methods=['POST'])
+@jwt_required()
+def osint_validate_result():
+    """Kullanıcının seçtiği sonucu doğrula ve kişi olarak ekle"""
+    try:
+        kullanici = get_current_user()
+        if not kullanici:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 401
+        
+        data = request.get_json() or {}
+        
+        # Zorunlu alanlar
+        isim = data.get('isim', '').strip()
+        soyisim = data.get('soyisim', '').strip()
+        eposta = data.get('eposta', '').strip()
+        
+        if not isim:
+            return jsonify({"error": "İsim zorunludur"}), 400
+        
+        # Opsiyonel alanlar
+        telefon = data.get('telefon', '').strip()
+        adres = data.get('adres', '').strip()
+        sehir = data.get('sehir', '').strip()
+        ulke = data.get('ulke', '').strip()
+        dogum_tarihi = data.get('dogum_tarihi', '').strip()
+        profil_resmi = data.get('profil_resmi', '').strip()
+        notlar = data.get('notlar', '').strip()
+        
+        # Geocoding (eğer adres varsa)
+        enlem, boylam = None, None
+        if adres:
+            from person_search import geocode_address
+            geo_result = geocode_address(adres)
+            if geo_result:
+                enlem = geo_result.get('lat')
+                boylam = geo_result.get('lon')
+                if not sehir:
+                    sehir = geo_result.get('city')
+                if not ulke:
+                    ulke = geo_result.get('country')
+        
+        # Kişi oluştur
+        yeni_kisi = Kisi(
+            kullanici_id=kullanici.id,
+            isim=isim,
+            soyisim=soyisim if soyisim else None,
+            eposta=eposta if eposta else None,
+            telefon=telefon if telefon else None,
+            adres=adres if adres else None,
+            sehir=sehir if sehir else None,
+            ulke=ulke if ulke else None,
+            enlem=enlem,
+            boylam=boylam,
+            notlar=notlar if notlar else None,
+            kaynak='osint_search'
+        )
+        
+        db.session.add(yeni_kisi)
+        db.session.commit()
+        
+        log_action('CREATE', 'Kisi', yeni_kisi.id, kullanici.id, f"OSINT aramasından eklendi: {isim}")
+        
+        return jsonify({
+            "mesaj": "Kişi başarıyla eklendi!",
+            "kisi": yeni_kisi.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 

@@ -551,14 +551,14 @@ textarea {
 }
 
 .view {
-    display: none;
+    display: none !important;
     visibility: hidden;
     position: absolute;
     left: -9999px;
 }
 
 .view.active {
-    display: block;
+    display: block !important;
     visibility: visible;
     position: relative;
     left: 0;
@@ -1905,7 +1905,7 @@ textarea {
 }
 
 /* ===== PHASE 4: LOCATION INTELLIGENCE STYLES ===== */
-#mapView {
+#mapView.active {
     position: relative;
     height: 100%;
     display: flex;
@@ -2147,7 +2147,7 @@ textarea {
 }
 
 /* ===== PHASE 5: NETWORK GRAPH STYLES ===== */
-#networkView {
+#networkView.active {
     position: relative;
     height: 100%;
     display: flex;
@@ -2868,4 +2868,175 @@ input:checked+.slider:before {
 
 .mask-result {
     margin-top: var(--space-md);
+}
+
+/* ===== PHASE 9: OSINT PERSON SEARCH STYLES ===== */
+.osint-search-box {
+    background: linear-gradient(135deg, var(--color-bg-card) 0%, rgba(139, 10, 26, 0.1) 100%);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-xl);
+}
+
+.osint-search-box .search-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--color-primary-light);
+}
+
+.osint-search-box .search-icon {
+    font-size: 1.5rem;
+}
+
+.osint-search-box .search-inputs {
+    display: flex;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.osint-search-box .search-inputs input {
+    flex: 1;
+    min-width: 200px;
+}
+
+.osint-search-box .search-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    color: var(--color-text-muted);
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* OSINT Result Cards */
+.osint-result-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.osint-result-card:hover {
+    border-color: var(--color-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow);
+}
+
+.osint-result-card .result-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-sm);
+}
+
+.osint-result-card .result-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: var(--radius-full);
+    background: var(--color-bg-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    overflow: hidden;
+}
+
+.osint-result-card .result-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.osint-result-card .result-info {
+    flex: 1;
+}
+
+.osint-result-card .result-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: var(--space-xs);
+}
+
+.osint-result-card .result-email {
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+}
+
+.osint-result-card .result-source {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--color-primary);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    margin-top: var(--space-xs);
+}
+
+.osint-result-card .result-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+.osint-result-card .result-detail-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.osint-no-results {
+    text-align: center;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+}
+
+.osint-no-results .icon {
+    font-size: 3rem;
+    margin-bottom: var(--space-md);
+}
+
+.confidence-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    margin-left: var(--space-sm);
+}
+
+.confidence-high {
+    background: var(--color-success);
+}
+
+.confidence-medium {
+    background: var(--color-warning);
+    color: #000;
+}
+
+.confidence-low {
+    background: var(--color-text-muted);
 }

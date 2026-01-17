@@ -2763,3 +2763,189 @@ window.enrichAllContacts = enrichAllContacts;
 window.closeEnrichmentModal = closeEnrichmentModal;
 window.loadContacts = loadContacts;
 
+// =============================================================================
+// PHASE 9: OSINT PERSON SEARCH
+// =============================================================================
+
+/**
+ * OSINT kişi arama
+ */
+async function osintPersonSearch() {
+    const email = document.getElementById('osintSearchEmail').value.trim();
+    const name = document.getElementById('osintSearchName').value.trim();
+
+    if (!email && !name) {
+        showToast('Hata', 'E-posta veya isim girin', 'error');
+        return;
+    }
+
+    // Loading göster
+    document.querySelector('.search-inputs').style.display = 'none';
+    document.getElementById('osintSearchLoading').style.display = 'flex';
+
+    try {
+        const response = await apiRequest('/api/osint/person-search', {
+            method: 'POST',
+            body: JSON.stringify({ email, name })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showOsintResults(data.sonuclar);
+        } else {
+            showToast('Hata', data.error || 'Arama başarısız', 'error');
+        }
+    } catch (error) {
+        showToast('Hata', 'Sunucuya bağlanılamadı', 'error');
+    } finally {
+        document.querySelector('.search-inputs').style.display = 'flex';
+        document.getElementById('osintSearchLoading').style.display = 'none';
+    }
+}
+
+/**
+ * OSINT sonuçlarını modal'da göster
+ */
+function showOsintResults(searchResults) {
+    const results = searchResults.results || [];
+    const modal = document.getElementById('osintResultsModal');
+    const body = document.getElementById('osintResultsBody');
+
+    if (results.length === 0) {
+        body.innerHTML = `
+            <div class="osint-no-results">
+                <div class="icon">🔍</div>
+                <h3>Sonuç Bulunamadı</h3>
+                <p>Bu kişi için internet'te kayıt bulunamadı.</p>
+                <p class="text-muted">Manuel olarak bilgileri girebilirsiniz.</p>
+            </div>
+        `;
+    } else {
+        let html = `<p class="text-muted">${results.length} sonuç bulundu. Birini seçin veya manuel giriş yapın.</p>`;
+
+        results.forEach((result, index) => {
+            const confidence = result.confidence || 0;
+            const confidenceClass = confidence >= 0.7 ? 'confidence-high' :
+                confidence >= 0.4 ? 'confidence-medium' : 'confidence-low';
+            const confidenceText = Math.round(confidence * 100) + '%';
+
+            const initials = (result.isim || '?')[0].toUpperCase() +
+                ((result.soyisim || '')[0] || '').toUpperCase();
+
+            html += `
+                <div class="osint-result-card" onclick="selectOsintResult(${index})" data-result='${JSON.stringify(result).replace(/'/g, "\\'")}'>
+                    <div class="result-header">
+                        <div class="result-avatar">
+                            ${result.profil_resmi ?
+                    `<img src="${result.profil_resmi}" alt="Avatar" onerror="this.parentElement.innerHTML='${initials}'">` :
+                    initials}
+                        </div>
+                        <div class="result-info">
+                            <div class="result-name">
+                                ${result.tam_isim || result.isim || 'İsimsiz'}
+                                <span class="confidence-badge ${confidenceClass}">${confidenceText}</span>
+                            </div>
+                            <div class="result-email">${result.eposta || 'E-posta yok'}</div>
+                            <div class="result-source">${result.source || 'Bilinmeyen kaynak'}</div>
+                        </div>
+                    </div>
+                    <div class="result-details">
+                        ${result.adres ? `<div class="result-detail-item">📍 ${result.adres}</div>` : ''}
+                        ${result.bio ? `<div class="result-detail-item">📝 ${result.bio.substring(0, 50)}...</div>` : ''}
+                        ${result.sosyal_medya?.github ? `<div class="result-detail-item">🐙 GitHub</div>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        body.innerHTML = html;
+    }
+
+    // Store results for selection
+    window.osintSearchResults = results;
+
+    modal.classList.add('active');
+}
+
+/**
+ * Seçilen OSINT sonucunu forma doldur
+ */
+function selectOsintResult(index) {
+    const result = window.osintSearchResults[index];
+    if (!result) return;
+
+    // Forma doldur
+    document.getElementById('contactName').value = result.isim || '';
+    document.getElementById('contactSurname').value = result.soyisim || '';
+    document.getElementById('contactEmail').value = result.eposta || '';
+    document.getElementById('contactAddress').value = result.adres || '';
+    document.getElementById('contactCity').value = result.sehir || '';
+    document.getElementById('contactCountry').value = result.ulke || 'Türkiye';
+
+    // Bio'yu notlara ekle
+    if (result.bio) {
+        document.getElementById('contactNotes').value = `[OSINT: ${result.source}]\n${result.bio}`;
+    }
+
+    // Sosyal medya linklerini notlara ekle
+    if (result.sosyal_medya) {
+        let notes = document.getElementById('contactNotes').value;
+        Object.entries(result.sosyal_medya).forEach(([platform, url]) => {
+            if (url) {
+                notes += `\n${platform}: ${url}`;
+            }
+        });
+        document.getElementById('contactNotes').value = notes;
+    }
+
+    // Modal'ı kapat
+    document.getElementById('osintResultsModal').classList.remove('active');
+
+    showToast('Başarılı', 'Bilgiler forma dolduruldu. Kontrol edin ve kaydedin.', 'success');
+}
+
+/**
+ * OSINT arama event listener'larını başlat
+ */
+function initOsintSearchEvents() {
+    // Arama butonu
+    document.getElementById('osintSearchBtn')?.addEventListener('click', osintPersonSearch);
+
+    // Enter tuşu ile arama
+    document.getElementById('osintSearchEmail')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            osintPersonSearch();
+        }
+    });
+
+    document.getElementById('osintSearchName')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            osintPersonSearch();
+        }
+    });
+
+    // Modal kapatma
+    document.getElementById('closeOsintModal')?.addEventListener('click', () => {
+        document.getElementById('osintResultsModal').classList.remove('active');
+    });
+
+    // Manuel giriş butonu
+    document.getElementById('osintManualEntry')?.addEventListener('click', () => {
+        document.getElementById('osintResultsModal').classList.remove('active');
+        showToast('Bilgi', 'Manuel olarak bilgileri girebilirsiniz.', 'info');
+    });
+}
+
+// Init on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Note: Other init functions already added in main DOMContentLoaded handler
+    // This adds OSINT search specifically
+    setTimeout(initOsintSearchEvents, 100);
+});
+
+// Global functions
+window.selectOsintResult = selectOsintResult;
+window.osintPersonSearch = osintPersonSearch;

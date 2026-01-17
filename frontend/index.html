@@ -619,6 +619,26 @@
                 <div id="addView" class="view">
                     <div class="form-container">
                         <h2 id="formTitle">Yeni Kişi Ekle</h2>
+
+                        <!-- OSINT Kişi Arama Bölümü -->
+                        <div class="osint-search-box" id="osintSearchBox">
+                            <div class="search-header">
+                                <span class="search-icon">🔍</span>
+                                <span>İnternette Kişi Ara</span>
+                            </div>
+                            <div class="search-inputs">
+                                <input type="email" id="osintSearchEmail" placeholder="E-posta adresi">
+                                <input type="text" id="osintSearchName" placeholder="İsim Soyisim">
+                                <button type="button" id="osintSearchBtn" class="btn btn-primary">
+                                    <span class="btn-icon">🌐</span> Ara
+                                </button>
+                            </div>
+                            <div class="search-loading" id="osintSearchLoading" style="display: none;">
+                                <div class="spinner"></div>
+                                <span>Aranıyor...</span>
+                            </div>
+                        </div>
+
                         <form id="contactForm">
                             <input type="hidden" id="editContactId">
 
@@ -731,6 +751,22 @@
             <div class="modal-footer">
                 <button id="cancelDelete" class="btn btn-secondary">İptal</button>
                 <button id="confirmDelete" class="btn btn-danger">Sil</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- OSINT Search Results Modal -->
+    <div id="osintResultsModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2>🔍 Arama Sonuçları</h2>
+                <button class="modal-close" id="closeOsintModal">×</button>
+            </div>
+            <div class="modal-body" id="osintResultsBody">
+                <!-- Dynamically filled -->
+            </div>
+            <div class="modal-footer">
+                <button id="osintManualEntry" class="btn btn-secondary">Manuel Giriş</button>
             </div>
         </div>
     </div>
